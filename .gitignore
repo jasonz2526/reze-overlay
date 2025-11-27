@@ -1,0 +1,8 @@
+.env
+manga109s-dataset
+Manga109s
+dataset
+data
+.venv
+__pycache__/
+*.pyc
