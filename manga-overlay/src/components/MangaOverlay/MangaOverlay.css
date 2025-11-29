@@ -1,0 +1,87 @@
+/* Import manga-style font */
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap');
+
+.manga-container {
+  position: relative;
+  width: 100%;
+  display: block;
+  overflow: hidden;
+}
+
+.manga-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Canvas that draws white masks over JP text */
+.mask-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.text-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.bubble-text,
+.outside-text {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-family: "Comic Neue", sans-serif;
+  font-weight: 600;
+
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: center;
+
+  pointer-events: none;
+  color: #000;
+
+  /* Tighter line spacing like real manga text */
+  line-height: 1.15;
+
+  /* Inner layout box */
+  box-sizing: border-box;
+}
+
+/* Inner text wrapper to limit text area */
+.text-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+
+  /* This controls vertical space between lines */
+  line-height: 1.15;
+}
+
+
+/* Debug outlines */
+.debug-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.debug-box {
+  position: absolute;
+  border: 2px dashed rgba(0, 180, 255, 0.7);
+}
+
+.debug-box.outside {
+  border-color: rgba(255, 100, 100, 0.8);
+}

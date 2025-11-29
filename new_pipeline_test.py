@@ -1,8 +1,10 @@
 from src.new_pipeline import MangaPipeline
 from src.translation.translate import MangaTranslator
 from src.translation.gpt import GPTTranslator
-import json
+from src.translation.merge import merge_panels_and_translations
 import os
+import json
+import shutil
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -81,6 +83,28 @@ def build_gpt_page_json(panels):
 
     return page
 
+def save_output(final_json, image_path):
+    # React frontend paths
+    react_src = "manga-overlay/src/"
+    react_public = "manga-overlay/public/"
+
+    os.makedirs(react_src, exist_ok=True)
+    os.makedirs(react_public, exist_ok=True)
+
+    # --- 1. Save JSON inside React src/ ---
+    output_filename = os.path.join(react_src, "translated_output.json")
+    with open(output_filename, "w", encoding="utf-8") as f:
+        json.dump(final_json, f, ensure_ascii=False, indent=2)
+
+    print(f"[OK] JSON saved → {os.path.abspath(output_filename)}")
+
+    # --- 2. Copy image into React public/ ---
+    image_basename = os.path.basename(image_path)
+    react_image_path = os.path.join(react_public, image_basename)
+
+    shutil.copy(image_path, react_image_path)
+    print(f"[OK] Image copied → {os.path.abspath(react_image_path)}")
+
 
 def main():
 
@@ -91,7 +115,7 @@ def main():
     deepl = MangaTranslator(DEEPL_API_KEY)
     gpt = GPTTranslator(model="gpt-5-mini", api_key=REZE_OPENAI_API_KEY)
 
-    image_path = "/Users/jasonzhao/reze-overlay/images/0026.jpg"
+    image_path = "/Users/jasonzhao/reze-overlay/images/0101.jpg"
     result = pipeline.process_page(image_path)
     panels = result["panels"]
 
@@ -112,7 +136,27 @@ def main():
         for t in p.get("outside_text", []):
             gpt_lookup[(pid, "text", t["text_id"])] = t["en"]
 
+    pipeline.visualize_result(result, image_path)
+    output_filename = "translated_output.json"
 
+    final_json = merge_panels_and_translations(panels, gpt_output)
+    final_json["image_filename"] = os.path.basename(image_path)
+
+    save_output(final_json, image_path)
+
+    '''
+    with open(output_filename, 'w', encoding='utf-8') as f:
+        json_string = json.dumps(
+            final_json, 
+            indent=2, 
+            ensure_ascii=False
+        )
+        f.write(json_string)
+
+    print(f"Data saved to {os.path.abspath(output_filename)}")
+    '''
+
+    '''
     print("\n=== TRANSLATION COMPARISON ===\n")
 
     for p_idx, panel in enumerate(panels, start=1):
@@ -145,7 +189,7 @@ def main():
             print(f"JP: {jp}")
             print(f"GPT   → {gpt_en}")
             print(f"DeepL → {deepl_en}")
-
+    '''
 
 if __name__ == "__main__":
     main()

@@ -124,8 +124,6 @@ def dedupe_panels_by_containment(panels, iou_thresh=0.5, containment_thresh=0.75
 
     return keep
 
-# NOTE: Your panel entries must include "confidence" for this to work correctly!
-
 class MangaPipeline:
     def __init__(self, panel_model_path, bubble_model_path):
         print("Loading panel model…")
@@ -142,14 +140,14 @@ class MangaPipeline:
         img = cv2.imread(image_path)
         h, w = img.shape[:2]
 
-        # --- DETECT PANELS ---
+        # DETECT PANELS
         panel_results = self.panel_detector(img)[0]
         panels = []
 
         for b in panel_results.boxes:
-            cls = int(b.cls[0])      # ← class ID from model
+            cls = int(b.cls[0])
             if cls != 0:
-                continue              # ← ONLY keep class 0 panels
+                continue # (Not using Class 1 Text here, only Class 0 panels)
 
             x1, y1, x2, y2 = b.xyxy[0].tolist()
             conf = float(b.conf[0])
@@ -161,22 +159,22 @@ class MangaPipeline:
                 "outside_text": []
             })
 
+        # Gets rid of overlapping panels, then sorts (WIP, sorting is hard)
         panels = dedupe_panels_by_containment(panels, containment_thresh=0.75)
-        # Sort panels top-to-bottom, then left-to-right
-        panels = sort_panels_reading_order(panels, rtl=True)
+        panels = sort_panels_reading_order_two_page(panels, w, h, rtl=True)
 
-        # --- DETECT BUBBLES + OUTSIDE TEXT ---
+        # Bubble + Text Detection
         bubble_results = self.bubble_detector(img)[0]
         boxes = bubble_results.boxes
 
         filtered_boxes = []
-        max_area = 0.04 * w * h  # 4% of page area
+        max_area = 0.08 * w * h  # 8% of page area
 
         for b in boxes:
             x1, y1, x2, y2 = b.xyxy[0]
             area = (x2 - x1) * (y2 - y1)
             if area < max_area:
-                filtered_boxes.append(b)
+                filtered_boxes.append(b) # No massive boxes allowed
 
         bubble_entries = []
         for b in filtered_boxes:
@@ -195,7 +193,7 @@ class MangaPipeline:
                 "ocr": ocr_output
             })
 
-        # --- ASSIGN EACH BUBBLE/TEXT TO THE BEST PANEL ---
+        # Assign every bubble/text to its closest respective panel
         for entry in bubble_entries:
             bx = entry["bbox"]
             bubble_area = (bx[2] - bx[0]) * (bx[3] - bx[1])
@@ -227,43 +225,37 @@ class MangaPipeline:
                     best_distance = dist
                     closest_panel = p
 
-            # === PRIMARY CASE: normal panel overlap ===
+            # Primary Case: Most the bubble is in panel
             if best_ratio > 0.3 and best_panel:
                 target_panel = best_panel
 
-            # === FALLBACK: assign to nearest panel ===
+            # Secondary: Just choose the closest panel
             else:
                 target_panel = closest_panel
 
-            # === (IMPORTANT) append while still inside loop! ===
             if entry["label"] == "bubble":
                 target_panel["bubbles"].append(entry)
             else:
                 target_panel["outside_text"].append(entry)
         
         for panel in panels:
-            # 1. MERGE lists to check for overlaps across categories
-            # We assume your entries have a "label" key ("bubble" or "outside")
+            # 1. Merge lists to check for overlaps across categories
             combined_regions = panel["bubbles"] + panel["outside_text"]
 
-            # 2. DEDUPE based on coordinates only
-            # iou_thresh=0.6 is a good sweet spot. 
-            # If > 60% of the box overlaps a larger one, it's gone.
+            # 2. Dedupe based on coordinates
             unique_regions = dedupe_by_coordinates(combined_regions, iou_thresh=0.6)
 
-            # 3. SORT the clean list by reading order
-            # (It is more efficient to sort once before splitting)
+            # 3. Sort the clean list by reading order
             sorted_unique_regions = sort_bubbles_inside_panel(unique_regions)
 
-            # 4. SPLIT back into specific lists (if you still need them separate)
+            # 4. Split back into specific lists
             panel["bubbles"] = [
                 r for r in sorted_unique_regions if r["label"] == "bubble"
             ]
             panel["outside_text"] = [
-                r for r in sorted_unique_regions if r["label"] != "bubble" # e.g. "outside"
+                r for r in sorted_unique_regions if r["label"] != "bubble"
             ]
 
-        # Return result
         return {
             "panels": panels
         }
@@ -275,23 +267,18 @@ class MangaPipeline:
 
         panels = result["panels"]
 
-        # Colors (BGR)
-        PANEL_COLOR = (255, 128, 0)   # Orange/Blue-ish
-        BUBBLE_COLOR = (0, 255, 0)    # Green
-        OUTSIDE_COLOR = (0, 0, 255)   # Red
+        PANEL_COLOR = (255, 128, 0)
+        BUBBLE_COLOR = (0, 255, 0)
+        OUTSIDE_COLOR = (0, 0, 255)
 
-        # Draw panels
         for p_idx, panel in enumerate(panels, start=1):
             x1, y1, x2, y2 = map(int, panel["bbox"])
 
-            # Panel rectangle
             cv2.rectangle(img, (x1, y1), (x2, y2), PANEL_COLOR, 2)
 
-            # Panel label
             cv2.putText(img, f"P{p_idx}", (x1, y1 - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, PANEL_COLOR, 2)
 
-            # Draw bubbles inside panel
             for b_idx, bubble in enumerate(panel["bubbles"], start=1):
                 bx1, by1, bx2, by2 = map(int, bubble["bbox"])
 
@@ -299,7 +286,6 @@ class MangaPipeline:
                 cv2.putText(img, f"P{p_idx}-B{b_idx}", (bx1, by1 - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, BUBBLE_COLOR, 2)
 
-            # Draw outside-text inside panel
             for t_idx, region in enumerate(panel["outside_text"], start=1):
                 tx1, ty1, tx2, ty2 = map(int, region["bbox"])
 
@@ -307,15 +293,13 @@ class MangaPipeline:
                 cv2.putText(img, f"P{p_idx}-O{t_idx}", (tx1, ty1 - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, OUTSIDE_COLOR, 2)
 
-        # Save
         if save_path is None:
             save_path = image_path.replace(".jpg", "_debug.jpg")
         else:
-            # Ensure save_path is a directory
             filename = os.path.basename(image_path)
             name, ext = os.path.splitext(filename)
             debug_filename = f"{name}_debug_panel{ext}"
-            save_path = os.path.join(save_path, debug_filename)  # "/images/001_debug.jpg"
+            save_path = os.path.join(save_path, debug_filename)
 
         cv2.imwrite(save_path, img)
         print(f"[✓] Visualization saved to {save_path}")
@@ -331,90 +315,124 @@ def is_point_in_box(point, box):
     x1, y1, x2, y2 = box
     return x1 <= px <= x2 and y1 <= py <= y2
 
-def sort_panels_reading_order(panels, rtl=True, col_overlap_ratio=0.6):
+def sort_panels_reading_order(panels, rtl=True, col_overlap_ratio=0.4):
     """
-    Sorts panels using a hybrid approach:
-    1. Groups panels into vertical columns based on horizontal overlap.
-    2. Sorts the columns RTL/LTR based on the top-most panel's position.
-    3. Sorts panels within the column TTB.
+    Improved manga panel ordering heuristic:
+    1. Group by rows (via vertical center proximity).
+    2. Sort rows TTB.
+    3. Inside each row, sort subgroups (vertical stacks) before crossing horizontally.
     """
+
     if not panels:
         return []
 
-    # 1. Add metadata
-    panel_items = []
+    # ---- Precompute metadata ----
+    enriched = []
     for p in panels:
         x1, y1, x2, y2 = p["bbox"]
-        panel_items.append({
+        enriched.append({
             "data": p,
-            "x_min": x1,
-            "x_max": x2,
-            "y_min": y1,
-            "width": x2 - x1
+            "x_center": (x1 + x2)/2,
+            "y_center": (y1 + y2)/2,
+            "w": x2 - x1,
+            "h": y2 - y1,
+            "x1": x1, "x2": x2,
+            "y1": y1, "y2": y2
         })
-    
-    # --- Helper Functions ---
-    def panels_in_same_column(p1, p2):
-        """Check if two panels are vertically stacked in the same column"""
-        overlap_start = max(p1["x_min"], p2["x_min"])
-        overlap_end = min(p1["x_max"], p2["x_max"])
-        overlap = max(0, overlap_end - overlap_start)
-        
-        # Must have significant horizontal overlap
-        min_width = min(p1["width"], p2["width"])
-        return overlap > min_width * col_overlap_ratio
 
-    def get_column_group(start_panel, remaining):
-        """Find all panels in the same vertical column as start_panel"""
-        column = [start_panel]
-        changed = True
-        
-        while changed:
-            changed = False
-            for panel in remaining[:]:
-                # Check for shared column membership
-                if any(panels_in_same_column(panel, col_panel) for col_panel in column):
-                    column.append(panel)
-                    remaining.remove(panel)
-                    changed = True
-        
-        # Crucial: Sort panels within the column TTB
-        return sorted(column, key=lambda x: x["y_min"]) 
-    
-    # 2. Group panels into columns
-    remaining = panel_items.copy()
-    groups = []
-    
-    while remaining:
-        # Start with the topmost and rightmost panel still remaining (RTL start)
-        remaining.sort(key=lambda x: (x["y_min"], -x["x_min"] if rtl else x["x_min"]))
-        start = remaining.pop(0)
-        column = get_column_group(start, remaining)
-        groups.append(column)
-    
-    # 3. Sort column groups by reading direction
-    def group_sort_key(group):
-        """
-        Sort key for groups based on the TOPMOST panel's position.
-        This forces column sorting first.
-        """
-        top_panel = min(group, key=lambda x: x["y_min"])
-        
-        if rtl:
-            # Sort by X (Right-to-Left) primarily, then Y (Top-to-Bottom)
-            return (-top_panel["x_min"], top_panel["y_min"])
-        else:
-            return (top_panel["x_min"], top_panel["y_min"])
-    
-    groups.sort(key=group_sort_key)
-    
-    # 4. Flatten groups into final panel order
-    sorted_panels = []
-    for group in groups:
-        # Group panels are already sorted TTB from Step 2
-        sorted_panels.extend([p["data"] for p in group])
-    
-    return sorted_panels
+    # Average panel height → used to determine row grouping
+    avg_h = sum(e["h"] for e in enriched) / len(enriched)
+    row_tol = avg_h * col_overlap_ratio
+
+    # ---- Step 1: Group panels into reading rows ----
+    enriched.sort(key=lambda e: e["y_center"])
+    rows = []
+
+    for p in enriched:
+        placed = False
+        for row in rows:
+            # Compare to row vertical center
+            row_avg_y = sum(e["y_center"] for e in row) / len(row)
+            if abs(p["y_center"] - row_avg_y) <= row_tol:
+                row.append(p)
+                placed = True
+                break
+        if not placed:
+            rows.append([p])
+
+    # ---- Step 2: Sort rows TTB ----
+    rows.sort(key=lambda row: min(p["y_center"] for p in row))
+
+    # ---- Helper for vertical-stack grouping inside row ----
+    def vertical_groups(row):
+        row = sorted(row, key=lambda p: p["x_center"], reverse=rtl)
+
+        groups = []
+        for p in row:
+            placed = False
+            for g in groups:
+                # If horizontally close, likely stacked vertically
+                if abs(p["x_center"] - g[0]["x_center"]) < p["w"] * 0.5:
+                    g.append(p)
+                    placed = True
+                    break
+            if not placed:
+                groups.append([p])
+
+        # sort each group vertically (TTB)
+        for g in groups:
+            g.sort(key=lambda p: p["y_center"])
+
+        # keep groups in RTL order
+        return groups
+
+    # ---- Step 3: build final ordering ----
+    final = []
+    for row in rows:
+        groups = vertical_groups(row)
+
+        # extend groups in the correct reading direction
+        for g in groups:
+            final.extend([p["data"] for p in g])
+
+    return final
+
+
+def sort_panels_reading_order_two_page(panels, img_width, img_height, rtl=True, col_overlap_ratio=0.):
+    """
+    Enhanced panel sorter:
+    - If width > height → treat as two-page spread.
+      Process RIGHT page first, then LEFT page.
+    - Otherwise → use normal sort_panels_reading_order.
+    """
+
+    # --- CASE 1: Single Page ---
+    if img_height >= img_width:
+        return sort_panels_reading_order(panels, rtl=rtl, col_overlap_ratio=col_overlap_ratio)
+
+    # --- CASE 2: Two-Page Spread (Right page first) ---
+    mid_x = img_width / 2
+
+    right_panels = [p for p in panels if p["bbox"][0] >= mid_x * 0.9]   # mostly right half
+    left_panels  = [p for p in panels if p["bbox"][2] <= mid_x * 1.1]   # mostly left half
+
+    # safety fallback: anything ambiguous goes to nearest side
+    for p in panels:
+        if p not in right_panels and p not in left_panels:
+            x_center = (p["bbox"][0] + p["bbox"][2]) / 2
+            if x_center > mid_x:
+                right_panels.append(p)
+            else:
+                left_panels.append(p)
+
+    # --- Sort RIGHT page panels FIRST (because manga RTL) ---
+    right_sorted = sort_panels_reading_order(right_panels, rtl=True, col_overlap_ratio=col_overlap_ratio)
+
+    # --- Sort LEFT page panels SECOND ---
+    left_sorted = sort_panels_reading_order(left_panels, rtl=True, col_overlap_ratio=col_overlap_ratio)
+
+    # Final reading order: RIGHT → LEFT
+    return right_sorted + left_sorted
 
 def sort_bubbles_inside_panel(bubbles):
     """
