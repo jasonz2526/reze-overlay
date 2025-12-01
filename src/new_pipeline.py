@@ -2,6 +2,7 @@ import cv2
 from ultralytics import YOLO
 from src.ocr.manga_ocr import OCRReader
 import os
+import numpy as np
 
 def box_overlap(a, b):
     """Compute intersection area between two boxes."""
@@ -136,8 +137,16 @@ class MangaPipeline:
         self.ocr = OCRReader()
 
 
-    def process_page(self, image_path):
-        img = cv2.imread(image_path)
+    def process_page(self, image):
+        # If already a NumPy image, use it directly
+        if isinstance(image, np.ndarray):
+            img = image
+        else:
+            # otherwise assume it's a path
+            img = cv2.imread(image)
+
+        if img is None:
+            raise ValueError("Failed to load image (bad path or bad input array).")
         h, w = img.shape[:2]
 
         # DETECT PANELS

@@ -31,43 +31,31 @@
   pointer-events: none;
 }
 
+/* Bubble and outside text share most styling */
 .bubble-text,
 .outside-text {
   position: absolute;
   display: flex;
-  align-items: center;
-  justify-content: center;
-
+  align-items: center;      /* Vertical centering */
+  justify-content: center;  /* Horizontal centering */
+  
   font-family: "Comic Neue", sans-serif;
   font-weight: 600;
-
-  white-space: pre-wrap;
-  word-break: break-word;
+  
+  /* CHANGED: Use normal to allow words to break when width is narrow */
+  white-space: normal;
+  
+  /* Allows single, long words (like "understand") to break onto new lines */
+  overflow-wrap: break-word; 
   text-align: center;
-
-  pointer-events: none;
   color: #000;
-
-  /* Tighter line spacing like real manga text */
-  line-height: 1.15;
-
-  /* Inner layout box */
+  
+  /* Consistent line-height */
+  line-height: 1.15; 
+  pointer-events: none;
+  
   box-sizing: border-box;
 }
-
-/* Inner text wrapper to limit text area */
-.text-inner {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-
-  /* This controls vertical space between lines */
-  line-height: 1.15;
-}
-
 
 /* Debug outlines */
 .debug-layer {

@@ -9,9 +9,7 @@ def merge_panels_and_translations(detector_panels, gpt_output):
         { "panels": [ ... merged panels ... ] }
     """
 
-    # -----------------------------------------------------------
     # 1. Build lookup tables from GPT output
-    # -----------------------------------------------------------
     gpt_bubble_lookup = {
         (p["panel_id"], b["bubble_id"]): b
         for p in gpt_output.get("panels", [])
@@ -24,9 +22,7 @@ def merge_panels_and_translations(detector_panels, gpt_output):
         for t in p.get("outside_text", [])
     }
 
-    # -----------------------------------------------------------
     # 2. Merge into one structure
-    # -----------------------------------------------------------
     merged = []
 
     for p_idx, det_panel in enumerate(detector_panels, start=1):

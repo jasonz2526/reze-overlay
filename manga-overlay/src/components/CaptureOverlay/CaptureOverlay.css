@@ -1,0 +1,16 @@
+.capture-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  cursor: crosshair;
+  z-index: 999999999;
+  pointer-events: auto !important;
+}
+
+.selection-rect {
+  position: fixed;
+  border: 2px solid #4fa3ff;
+  background: rgba(79, 163, 255, 0.25);
+  border-radius: 4px;
+  z-index: 1000000000;
+}
