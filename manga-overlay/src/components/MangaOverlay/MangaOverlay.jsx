@@ -126,9 +126,9 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
     tester.innerText = text;
     document.body.appendChild(tester);
 
-    let low = 5; 
+    let low = 6; 
     let high = 30; 
-    let bestFit = 5; // FIXED: Initialize to min, not arbitrary 15
+    let bestFit = 6;
 
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
@@ -176,13 +176,9 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
     });
 
     // Clamp the result to reasonable bounds (e.g., don't go below 11px, don't go above 22px)
-    let finalGlobalSize = Math.max(5, Math.min(minCalculatedSize, 22));
+    const finalGlobalSize = Math.max(5, Math.min(minCalculatedSize, 22));
 
-    // 2. Apply font-specific scaling
-    if (FONT_FAMILY.includes("'aa'")) {
-       finalGlobalSize = finalGlobalSize / 1.5;
-    }
-
+    console.log(finalGlobalSize)
     setGlobalFontSize(finalGlobalSize);
 
 
