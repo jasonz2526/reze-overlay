@@ -3,7 +3,11 @@
     "name": "Manga Overlay Translator",
     "version": "0.1.0",
     "description": "Drag-to-crop and overlay translations on manga pages.",
-    "permissions": [],
+    "permissions": [
+      "tabs",
+      "activeTab",
+      "scripting"
+    ],
     "host_permissions": [
       "https://*/*",
       "http://*/*"
@@ -18,9 +22,12 @@
     ],
     "web_accessible_resources": [
       {
-        "resources": ["overlay.js", "overlay.css"],
+        "resources": ["overlay.js", "overlay.css", "fonts/*.otf", "fonts/*.woff2"],
         "matches": ["https://*/*", "http://*/*"]
       }
-    ]
+    ],
+    "background": {
+      "service_worker": "background.js"
+    }
   }
   

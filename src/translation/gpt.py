@@ -1,9 +1,8 @@
 import json
 import time
 from typing import Dict, Any, List, Optional
-from openai import OpenAI
-import os
-
+from openai import OpenAI, AsyncOpenAI
+import asyncio
 
 class GPTTranslator:
     """
@@ -18,13 +17,12 @@ class GPTTranslator:
         if not self.api_key:
             raise RuntimeError("Missing OpenAI API key")
 
-        self.client = OpenAI(api_key=self.api_key)
+        #self.client = OpenAI(api_key=self.api_key)
+        self.client = AsyncOpenAI(api_key=api_key)
         self.model = model
         self.max_retries = 3
 
-    # -------------------------------------------------------------------------
     # Prompt builder
-    # -------------------------------------------------------------------------
     def _build_prompt(self, page_json: Dict[str, Any]) -> str:
         schema = """
 {
@@ -77,12 +75,9 @@ Here is the page to translate:
 
 {json.dumps(page_json, ensure_ascii=False, indent=2)}
 """
-
-    # -------------------------------------------------------------------------
     # Extract text safely from OpenAI response
-    # -------------------------------------------------------------------------
-    def _call_llm(self, prompt: str) -> str:
-        response = self.client.responses.create(
+    async def _call_llm(self, prompt: str) -> str:
+        response = await self.client.responses.create(
             model=self.model,
             input=prompt,
         )
@@ -99,19 +94,15 @@ Here is the page to translate:
             + json.dumps(response.model_dump(), indent=2, ensure_ascii=False)
         )
 
-    # -------------------------------------------------------------------------
     # Validate & parse returned JSON
-    # -------------------------------------------------------------------------
     def _safe_json_parse(self, text: str) -> Optional[Dict[str, Any]]:
         try:
             return json.loads(text.strip())
         except Exception:
             return None
 
-    # -------------------------------------------------------------------------
     # Public API — translate full page
-    # -------------------------------------------------------------------------
-    def translate_page(self, page_json: Dict[str, Any]) -> Dict[str, Any]:
+    async def translate_page(self, page_json: Dict[str, Any]) -> Dict[str, Any]:
         """
         page_json must be your panel output:
         {
@@ -127,20 +118,18 @@ Here is the page to translate:
         prompt = self._build_prompt(page_json)
 
         for attempt in range(self.max_retries):
-            raw = self._call_llm(prompt)
+            raw = await self._call_llm(prompt)
             parsed = self._safe_json_parse(raw)
 
             if parsed and "panels" in parsed:
                 return parsed
 
             print(f"[WARN] JSON parse failed on attempt {attempt+1}. Retrying...")
-            time.sleep(0.4)
+            await asyncio.sleep(0.4)
 
         raise ValueError("LLM failed to output valid JSON.")
 
-    # -------------------------------------------------------------------------
     # Flatten for evaluation later
-    # -------------------------------------------------------------------------
     @staticmethod
     def flatten(translated_json: Dict[str, Any]) -> List[Dict[str, str]]:
         """

@@ -1,3 +1,5 @@
+# src/translation/utils.py
+
 def get_sorted_text(region):
     """Sort OCR words inside a bubble or text box."""
     words = region["ocr"]

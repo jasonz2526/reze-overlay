@@ -1,5 +1,12 @@
-/* Import manga-style font */
-@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap');
+/* @import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap'); */
+
+@font-face {
+  font-family: 'aa';
+  src: url("/fonts/animeace2_reg.woff2") format("woff2"),
+       url('/fonts/animeace2_reg.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
 
 .manga-container {
   position: relative;
@@ -39,20 +46,30 @@
   align-items: center;      /* Vertical centering */
   justify-content: center;  /* Horizontal centering */
   
-  font-family: "Comic Neue", sans-serif;
+  font-family: "aa", sans-serif;
   font-weight: 600;
   
-  /* CHANGED: Use normal to allow words to break when width is narrow */
   white-space: normal;
   
   /* Allows single, long words (like "understand") to break onto new lines */
-  overflow-wrap: break-word; 
   text-align: center;
   color: #000;
   
   /* Consistent line-height */
   line-height: 1.15; 
   pointer-events: none;
+
+  /* Allow breaks anywhere if the word is too long for the line */
+  overflow-wrap: anywhere; 
+  word-break: break-word;
+
+  /* Add automatic hyphenation (makes breaks look natural) */
+  -webkit-hyphens: auto;
+  -ms-hyphens: auto;
+  hyphens: auto;
+  
+  /*  Optional: slight letter tightening helps fit long words */
+  letter-spacing: -0.02em;
   
   box-sizing: border-box;
 }

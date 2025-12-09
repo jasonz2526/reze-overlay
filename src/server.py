@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import uvicorn
 import os
+import asyncio
 
 from src.new_pipeline import MangaPipeline
 from src.translation.translate import MangaTranslator  # DeepL
@@ -63,7 +64,7 @@ def process_image(req: ImageRequest):
         gpt_input_json = build_gpt_page_json(page_result["panels"])
 
         # 4. Get GPT translation
-        gpt_output = gpt.translate_page(gpt_input_json)
+        gpt_output = asyncio.run(gpt.translate_page(gpt_input_json))
 
         # 5. Merge GPT translations back into panel structures
         final_json = merge_panels_and_translations(page_result["panels"], gpt_output)

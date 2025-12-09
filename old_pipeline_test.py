@@ -1,4 +1,4 @@
-from src.pipeline import MangaPipeline
+from prev.pipeline import MangaPipeline
 from src.translation.translate import MangaTranslator
 import json
 from dotenv import load_dotenv

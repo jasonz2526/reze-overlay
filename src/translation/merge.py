@@ -1,3 +1,5 @@
+# src/translation/merge.py
+
 def merge_panels_and_translations(detector_panels, gpt_output):
     """
     Merge YOLO/OCR panel structure with GPT translation output.
@@ -33,7 +35,7 @@ def merge_panels_and_translations(detector_panels, gpt_output):
             "outside_text": []
         }
 
-        # ---------- Merge bubbles ----------
+        # Merge bubbles
         for b_idx, bubble in enumerate(det_panel.get("bubbles", []), start=1):
             key = (p_idx, b_idx)
             if key in gpt_bubble_lookup:
@@ -53,7 +55,7 @@ def merge_panels_and_translations(detector_panels, gpt_output):
                     "en": "<missing>"
                 })
 
-        # ---------- Merge outside text ----------
+        # Merge outside text
         for t_idx, text_entry in enumerate(det_panel.get("outside_text", []), start=1):
             key = (p_idx, t_idx)
             if key in gpt_outside_lookup:

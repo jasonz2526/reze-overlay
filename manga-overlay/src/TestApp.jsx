@@ -39,7 +39,7 @@ export default function TestMangaPage() {
     <div
       style={{
         width: "100vw",
-        height: "200vh", // MAKE PAGE SCROLLABLE to simulate real manga pages
+        height: "200vh",
         overflowY: "scroll",
         background: "#222",
         padding: "20px",
@@ -52,7 +52,7 @@ export default function TestMangaPage() {
         onClick={handleStart}
         style={{
           position: "fixed",
-          top: "20px",
+          top: "200px",
           right: "20px",
           zIndex: 99999,
           padding: "10px 16px",
@@ -69,11 +69,10 @@ export default function TestMangaPage() {
 
       {/* Fake manga image */}
       <img
-        src="/test.jpg"
+        src="/example2.jpg"
         alt="Manga Page"
         style={{
-          width: "80%",
-          maxWidth: "800px",
+          width: "60%",
           display: "block",
           margin: "0 auto",
         }}

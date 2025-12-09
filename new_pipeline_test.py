@@ -1,3 +1,4 @@
+# LOCAL TESTING FILE
 from src.new_pipeline import MangaPipeline
 from src.translation.translate import MangaTranslator
 from src.translation.gpt import GPTTranslator

@@ -1,7 +1,8 @@
 // manga-overlay/src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./TestApp";
+// import App from "./TestApp"; // UNCOMMENT HERE AND COMMENT THE BELOW FOR TESTING PURPOSES
+import App from "./App"; // COMMENT OUT THIS DURING TESTING, UNCOMMENT FOR DEPLOYED EXTENSION
 
 // Try to find the overlay root (injected by extension)
 const existing = document.getElementById("manga-overlay-root");

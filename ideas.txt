@@ -1,4 +1,0 @@
-1. plan goes panel identification, then bubble YOLO for each panel.
-2. if bubble is in panel, translate and use for context
-3. if not, see if bubble is mostly inside a panel
-4. use OCR for rest of text

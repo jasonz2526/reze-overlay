@@ -4,127 +4,6 @@ from src.ocr.manga_ocr import OCRReader
 import os
 import numpy as np
 
-def box_overlap(a, b):
-    """Compute intersection area between two boxes."""
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-
-    ix1 = max(ax1, bx1)
-    iy1 = max(ay1, by1)
-    ix2 = min(ax2, bx2)
-    iy2 = min(ay2, by2)
-
-    if ix2 <= ix1 or iy2 <= iy1:
-        return 0.0
-    
-    return (ix2 - ix1) * (iy2 - iy1)
-
-def dedupe_by_coordinates(regions, iou_thresh=0.6):
-    """
-    Remove duplicates based strictly on overlapping coordinates (IoU).
-    Prioritizes larger boxes.
-    """
-    # 1. Define Area and IoU helpers
-    def get_area(b):
-        x1, y1, x2, y2 = b["bbox"]
-        return (x2 - x1) * (y2 - y1)
-
-    def get_iou(b1, b2):
-        # Coordinates of the intersection rectangle
-        x1 = max(b1["bbox"][0], b2["bbox"][0])
-        y1 = max(b1["bbox"][1], b2["bbox"][1])
-        x2 = min(b1["bbox"][2], b2["bbox"][2])
-        y2 = min(b1["bbox"][3], b2["bbox"][3])
-
-        # If they don't overlap, area is 0
-        if x2 < x1 or y2 < y1:
-            return 0.0
-
-        intersection_area = (x2 - x1) * (y2 - y1)
-        
-        area1 = get_area(b1)
-        area2 = get_area(b2)
-        union_area = area1 + area2 - intersection_area
-
-        if union_area == 0: return 0.0
-        return intersection_area / union_area
-
-    # 2. Sort by Area (Descending) 
-    # We keep the larger box when an overlap occurs.
-    regions_sorted = sorted(regions, key=get_area, reverse=True)
-
-    kept_regions = []
-
-    for current in regions_sorted:
-        is_duplicate = False
-        
-        for kept in kept_regions:
-            # PURE COORDINATE CHECK
-            # If they overlap significantly, current is a duplicate
-            if get_iou(current, kept) > iou_thresh:
-                is_duplicate = True
-                break
-        
-        if not is_duplicate:
-            kept_regions.append(current)
-
-    return kept_regions
-
-def dedupe_panels_by_containment(panels, iou_thresh=0.5, containment_thresh=0.75):
-    """
-    Applies NMS based on confidence, prioritizing IoU, but also checks for high
-    containment (IoA) to eliminate smaller boxes fully contained within larger, 
-    more confident ones.
-    """
-    if not panels:
-        return []
-
-    def get_area(p):
-        x1, y1, x2, y2 = p["bbox"]
-        return (x2 - x1) * (y2 - y1)
-
-    # 1. Sort by CONFIDENCE (highest first) - The most confident box is the 'keeper'
-    panels_sorted = sorted(panels, key=lambda p: p["confidence"], reverse=True)
-
-    keep = []
-    
-    while panels_sorted:
-        # Pick the most confident remaining box
-        current = panels_sorted.pop(0)
-        keep.append(current)
-        
-        remaining = []
-        current_area = get_area(current)
-
-        for other in panels_sorted:
-            # Calculate IoU for general overlap check
-            # (Requires an IoU helper function, same logic as before)
-            # We'll use a simplified containment check for this example:
-
-            # Get Intersection Area
-            xA = max(current["bbox"][0], other["bbox"][0])
-            yA = max(current["bbox"][1], other["bbox"][1])
-            xB = min(current["bbox"][2], other["bbox"][2])
-            yB = min(current["bbox"][3], other["bbox"][3])
-            interArea = max(0, xB - xA) * max(0, yB - yA)
-
-            # Get Containment Ratio (IoA): Intersection Area / Area of the smaller box ('other')
-            other_area = get_area(other)
-            
-            # Use IoA to check if the smaller box ('other') is largely contained
-            containment_ratio = interArea / other_area if other_area > 0 else 0
-
-            # --- DEDUPLICATION LOGIC ---
-            # If the smaller box ('other') is highly contained within the current (more confident) box, discard it.
-            if containment_ratio < containment_thresh:
-                remaining.append(other)
-            # else: containment_ratio >= 0.75, so 'other' is a duplicate detection
-            # contained within 'current', and we discard it.
-        
-        panels_sorted = remaining
-
-    return keep
-
 class MangaPipeline:
     def __init__(self, panel_model_path, bubble_model_path):
         print("Loading panel model…")
@@ -270,7 +149,7 @@ class MangaPipeline:
         }
 
 
-    def visualize_result(self, result, image_path, save_path="/Users/jasonzhao/reze-overlay/images"):
+    def visualize_result(self, result, image_path, save_path="/Users/jasonzhao/reze-overlay/images"): # DEBUG METHOD
         """Draw panels, bubbles, and outside text boxes on an image."""
         img = cv2.imread(image_path)
 
@@ -335,7 +214,6 @@ def sort_panels_reading_order(panels, rtl=True, col_overlap_ratio=0.4):
     if not panels:
         return []
 
-    # ---- Precompute metadata ----
     enriched = []
     for p in panels:
         x1, y1, x2, y2 = p["bbox"]
@@ -349,11 +227,11 @@ def sort_panels_reading_order(panels, rtl=True, col_overlap_ratio=0.4):
             "y1": y1, "y2": y2
         })
 
-    # Average panel height → used to determine row grouping
+    # Average panel height
     avg_h = sum(e["h"] for e in enriched) / len(enriched)
     row_tol = avg_h * col_overlap_ratio
 
-    # ---- Step 1: Group panels into reading rows ----
+    # Group panels into reading rows 
     enriched.sort(key=lambda e: e["y_center"])
     rows = []
 
@@ -369,13 +247,11 @@ def sort_panels_reading_order(panels, rtl=True, col_overlap_ratio=0.4):
         if not placed:
             rows.append([p])
 
-    # ---- Step 2: Sort rows TTB ----
+    # Sort rows Top To Bottom
     rows.sort(key=lambda row: min(p["y_center"] for p in row))
 
-    # ---- Helper for vertical-stack grouping inside row ----
     def vertical_groups(row):
         row = sorted(row, key=lambda p: p["x_center"], reverse=rtl)
-
         groups = []
         for p in row:
             placed = False
@@ -395,7 +271,7 @@ def sort_panels_reading_order(panels, rtl=True, col_overlap_ratio=0.4):
         # keep groups in RTL order
         return groups
 
-    # ---- Step 3: build final ordering ----
+    # Build Final Ordering
     final = []
     for row in rows:
         groups = vertical_groups(row)
@@ -442,6 +318,7 @@ def sort_panels_reading_order_two_page(panels, img_width, img_height, rtl=True, 
 
     # Final reading order: RIGHT → LEFT
     return right_sorted + left_sorted
+
 
 def sort_bubbles_inside_panel(bubbles):
     """
@@ -492,3 +369,125 @@ def sort_bubbles_inside_panel(bubbles):
         
     final_bubbles = [b["data"] for row in rows for b in row]
     return final_bubbles
+
+def box_overlap(a, b):
+    """Compute intersection area between two boxes."""
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+
+    ix1 = max(ax1, bx1)
+    iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2)
+    iy2 = min(ay2, by2)
+
+    if ix2 <= ix1 or iy2 <= iy1:
+        return 0.0
+    
+    return (ix2 - ix1) * (iy2 - iy1)
+
+def dedupe_by_coordinates(regions, iou_thresh=0.6):
+    """
+    Remove duplicates based strictly on overlapping coordinates (IoU).
+    Prioritizes larger boxes.
+    """
+    # 1. Define Area and IoU helpers
+    def get_area(b):
+        x1, y1, x2, y2 = b["bbox"]
+        return (x2 - x1) * (y2 - y1)
+
+    def get_iou(b1, b2):
+        # Coordinates of the intersection rectangle
+        x1 = max(b1["bbox"][0], b2["bbox"][0])
+        y1 = max(b1["bbox"][1], b2["bbox"][1])
+        x2 = min(b1["bbox"][2], b2["bbox"][2])
+        y2 = min(b1["bbox"][3], b2["bbox"][3])
+
+        # If they don't overlap, area is 0
+        if x2 < x1 or y2 < y1:
+            return 0.0
+
+        intersection_area = (x2 - x1) * (y2 - y1)
+        
+        area1 = get_area(b1)
+        area2 = get_area(b2)
+        union_area = area1 + area2 - intersection_area
+
+        if union_area == 0: return 0.0
+        return intersection_area / union_area
+
+    # 2. Sort by Area (Descending) 
+    # We keep the larger box when an overlap occurs.
+    regions_sorted = sorted(regions, key=get_area, reverse=True)
+
+    kept_regions = []
+
+    for current in regions_sorted:
+        is_duplicate = False
+        
+        for kept in kept_regions:
+            # PURE COORDINATE CHECK
+            # If they overlap significantly, current is a duplicate
+            if get_iou(current, kept) > iou_thresh:
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
+            kept_regions.append(current)
+
+    return kept_regions
+
+
+def dedupe_panels_by_containment(panels, iou_thresh=0.5, containment_thresh=0.75):
+    """
+    Applies NMS based on confidence, prioritizing IoU, but also checks for high
+    containment (IoA) to eliminate smaller boxes fully contained within larger, 
+    more confident ones.
+    """
+    if not panels:
+        return []
+
+    def get_area(p):
+        x1, y1, x2, y2 = p["bbox"]
+        return (x2 - x1) * (y2 - y1)
+
+    # 1. Sort by CONFIDENCE (highest first) - The most confident box is the 'keeper'
+    panels_sorted = sorted(panels, key=lambda p: p["confidence"], reverse=True)
+
+    keep = []
+    
+    while panels_sorted:
+        # Pick the most confident remaining box
+        current = panels_sorted.pop(0)
+        keep.append(current)
+        
+        remaining = []
+        current_area = get_area(current)
+
+        for other in panels_sorted:
+            # Calculate IoU for general overlap check
+            # (Requires an IoU helper function, same logic as before)
+            # We'll use a simplified containment check for this example:
+
+            # Get Intersection Area
+            xA = max(current["bbox"][0], other["bbox"][0])
+            yA = max(current["bbox"][1], other["bbox"][1])
+            xB = min(current["bbox"][2], other["bbox"][2])
+            yB = min(current["bbox"][3], other["bbox"][3])
+            interArea = max(0, xB - xA) * max(0, yB - yA)
+
+            # Get Containment Ratio (IoA): Intersection Area / Area of the smaller box ('other')
+            other_area = get_area(other)
+            
+            # Use IoA to check if the smaller box ('other') is largely contained
+            containment_ratio = interArea / other_area if other_area > 0 else 0
+
+            # --- DEDUPLICATION LOGIC ---
+            # If the smaller box ('other') is highly contained within the current (more confident) box, discard it.
+            if containment_ratio < containment_thresh:
+                remaining.append(other)
+            # else: containment_ratio >= 0.75, so 'other' is a duplicate detection
+            # contained within 'current', and we discard it.
+        
+        panels_sorted = remaining
+
+    return keep
