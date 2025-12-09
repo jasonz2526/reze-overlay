@@ -69,3 +69,11 @@ Qualitative Outcomes:
 - Overlay aligns closely with original bubbles
 - Dynamic font sizing prevents overflow or clipping
 - Works across MangaDex, ComicWalker, Webtoons, and most image-based readers
+
+
+## Examples:
+### Before
+![Original Manga Page](assets/before1.png)
+
+### After (With Debug Boxes)
+![Translated Overlay](assets/after1.png)
