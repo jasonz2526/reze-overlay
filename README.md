@@ -72,8 +72,13 @@ Qualitative Outcomes:
 
 
 ## Examples:
-### Before
-![Original Manga Page](assets/before1.png)
-
-### After (With Debug Boxes)
-![Translated Overlay](assets/after1.png)
+<table>
+  <tr>
+    <th>Before Translation</th>
+    <th>After Translation (With Debug Boxes)</th>
+  </tr>
+  <tr>
+    <td><img src="assets/before1.png" width="100%" /></td>
+    <td><img src="assets/after1.png" width="100%" /></td>
+  </tr>
+</table>
