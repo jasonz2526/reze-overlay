@@ -42,7 +42,7 @@ RezeOverlay allows users to translate manga panels on any website without downlo
 ## Video Links
 [Demo Video](https://www.youtube.com/watch?v=vtOj60nGBqk)
 
-Technical Walkthrough:
+[Technical Walkthrough](https://www.youtube.com/watch?v=T030joxuWhU)
 
 ## Evaluation
 
