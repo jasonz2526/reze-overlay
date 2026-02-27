@@ -1,12 +1,4 @@
-/* @import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap'); */
-
-@font-face {
-  font-family: 'aa';
-  src: url("/fonts/animeace2_reg.woff2") format("woff2"),
-       url('/fonts/animeace2_reg.otf') format('opentype');
-  font-weight: normal;
-  font-style: normal;
-}
+/* Font face is injected by contentScript.js with chrome.runtime.getURL(). */
 
 .manga-container {
   position: relative;

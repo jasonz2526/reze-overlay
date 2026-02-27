@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RezeOverlay</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <h1>RezeOverlay</h1>
+
+      <section class="mode-group">
+        <p class="label">Translation mode</p>
+        <label>
+          <input type="radio" name="mode" value="simple" checked />
+          Simple (faster)
+        </label>
+        <label>
+          <input type="radio" name="mode" value="deep" />
+          Deep (context-aware)
+        </label>
+      </section>
+
+      <button id="startCaptureBtn" type="button">Start Capture</button>
+      <p class="hint">Shortcut: Ctrl+Shift+M or Command+Shift+M</p>
+    </main>
+
+    <script src="./popup.js"></script>
+  </body>
+</html>

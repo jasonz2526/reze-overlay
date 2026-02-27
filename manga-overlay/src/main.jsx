@@ -1,8 +1,10 @@
 // manga-overlay/src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-// import App from "./TestApp"; // UNCOMMENT HERE AND COMMENT THE BELOW FOR TESTING PURPOSES
-import App from "./App"; // COMMENT OUT THIS DURING TESTING, UNCOMMENT FOR DEPLOYED EXTENSION
+import App from "./App";
+import TestApp from "./TestApp";
+
+const RootApp = import.meta.env.VITE_APP_MODE === "test" ? TestApp : App;
 
 // Try to find the overlay root (injected by extension)
 const existing = document.getElementById("manga-overlay-root");
@@ -24,6 +26,6 @@ if (!container) {
 const root = ReactDOM.createRoot(container);
 root.render(
   <React.StrictMode>
-    <App />
+    <RootApp />
   </React.StrictMode>
 );

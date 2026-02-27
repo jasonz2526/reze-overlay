@@ -12,9 +12,12 @@ RezeOverlay allows users to translate manga panels on any website without downlo
 - Install Python 3.10+
 - Install dependencies:
   pip install -r requirements.txt
-- Add your OpenAI API key inside GPTTranslator (src/translation/gpt.py) or as an environment variable in the backend (src/server.py).
+  (runtime-only option: `pip install -r requirements-runtime.txt`)
+- Set your API keys:
+  export OPENAI_API_KEY="YOUR_KEY_HERE"
+  export DEEPL_API_KEY="YOUR_KEY_HERE"
 - Run the backend:
-  python -m uvicorn server:app --reload --port 8000
+  python -m uvicorn src.server:app --reload --port 8000
 
 ### 2. React Overlay App
 - Navigate to the manga-overlay folder:
@@ -23,6 +26,8 @@ RezeOverlay allows users to translate manga panels on any website without downlo
   npm install
 - Start dev server:
   npm run dev
+- Optional test mode (without extension wiring):
+  VITE_APP_MODE=test npm run dev
 - This builds the overlay that the Chrome extension injects.
 
 ### 3. Chrome Extension Setup
@@ -35,7 +40,8 @@ RezeOverlay allows users to translate manga panels on any website without downlo
 
 ### 4. Using the Tool
 - Navigate to any manga website
-- Click “Capture Manga Area”
+- Click the extension icon and choose `Simple` or `Deep`, then press `Start Capture`
+- Or use shortcut: `Ctrl+Shift+M` (`Command+Shift+M` on macOS)
 - Drag a rectangle around the manga panel
 - The overlay appears automatically with masks + translated bubbles
 

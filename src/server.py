@@ -18,7 +18,8 @@ from src.translation.merge import merge_panels_and_translations
 from dotenv import load_dotenv
 load_dotenv()
 
-REZE_OPENAI_API_KEY = os.getenv("REZE_OPENAI_API_KEY")
+# Prefer the standard key name, but keep backward compatibility.
+REZE_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("REZE_OPENAI_API_KEY")
 DEEPL_API_KEY = os.getenv("DEEPL_API_KEY")
 
 # Load models once

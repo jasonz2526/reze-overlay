@@ -12,7 +12,7 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
   const canvasRef = useRef(null);
 
   const [scale, setScale] = useState(0); // Initialize at 0 to prevent early calcs
-  const [globalFontSize, setGlobalFontSize] = useState(16); // Default fallback
+  const [bubbleFontSizes, setBubbleFontSizes] = useState({});
   const [outsideFontSizes, setOutsideFontSizes] = useState({});
 
   // 1. Compute scale based on the rendered image
@@ -152,34 +152,31 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
   useEffect(() => {
     if (!scale || panels.length === 0) return;
 
-    const FONT_FAMILY = "'aa', sans-serif";
-
-    // Part A: Calculate Bubble Sizes
-    // We want the font size to be consistent, but small enough to fit the "tightest" bubble.
-    let minCalculatedSize = 100; // Start high
+    // Part A: Calculate Bubble Sizes (independent per bubble)
+    // We shrink usable area a bit because bubble masks are elliptical.
+    const newBubbleSizes = {};
+    const bubblePaddingFactorW = 0.82;
+    const bubblePaddingFactorH = 0.82;
+    const maxTallHeightBonus = 0.10;
 
     panels.forEach((panel) => {
-      panel.bubbles?.forEach((b) => {
+      panel.bubbles?.forEach((b, bIdx) => {
         const [x1, y1, x2, y2] = b.bbox;
-        const w = (x2 - x1) * scale;
-        const h = (y2 - y1) * scale;
-        
-        // Compute best fit for THIS specific bubble
-        // Note: passing 4 as padding because CSS has padding: 4px
-        const bestFit = calculateMaxFit(b.en, w, h, 4);
-        
-        // Track the smallest size found across all bubbles
-        if (bestFit < minCalculatedSize) {
-          minCalculatedSize = bestFit;
-        }
+        const boxW = (x2 - x1) * scale;
+        const boxH = (y2 - y1) * scale;
+        const aspectRatio = boxH / Math.max(boxW, 1);
+        const tallness = Math.max(0, Math.min(aspectRatio - 1, 1));
+        const usableW = boxW * bubblePaddingFactorW;
+        const usableH = boxH * (bubblePaddingFactorH + tallness * maxTallHeightBonus);
+        const fitted = calculateMaxFit(b.en, usableW, usableH, 0);
+        const bubbleSizeNudge = tallness > 0.35 ? 0 : 1;
+        const key = `${panel.panel_id ?? "p"}-${b.bubble_id ?? bIdx}`;
+
+        newBubbleSizes[key] = (Math.max(5, Math.min(fitted, 22)) - bubbleSizeNudge) * 0.7;
       });
     });
 
-    // Clamp the result to reasonable bounds (e.g., don't go below 11px, don't go above 22px)
-    const finalGlobalSize = Math.max(5, Math.min(minCalculatedSize, 22)) - 3;
-
-    console.log(finalGlobalSize)
-    setGlobalFontSize(finalGlobalSize);
+    setBubbleFontSizes(newBubbleSizes);
 
 
     // Part B: Calculate Outside Text Sizes (Independent)
@@ -232,19 +229,24 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
         {panels.map((panel, pIdx) => (
           <React.Fragment key={pIdx}>
             
-            {/* Bubbles - Using Global "Minimum Necessary" Font Size */}
+            {/* Bubbles - Independent per bubble */}
             {panel.bubbles?.map((b, bIdx) => (
+              (() => {
+                const key = `${panel.panel_id ?? "p"}-${b.bubble_id ?? bIdx}`;
+                return (
               <div
                 key={`bubble-${pIdx}-${bIdx}`}
                 className="bubble-text"
                 style={{
                   ...boxStyle(b.bbox),
-                  fontSize: `${globalFontSize}px`,
+                  fontSize: `${bubbleFontSizes[key] || 12}px`,
                   padding: "4px", // Matches logic in calculateMaxFit
                 }}
               >
                 {b.en}
               </div>
+                );
+              })()
             ))}
 
             {/* Outside Text - Independent Sizes */}

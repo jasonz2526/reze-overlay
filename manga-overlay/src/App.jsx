@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import CaptureOverlay from "./components/CaptureOverlay/CaptureOverlay";
 import MangaOverlay from "./components/MangaOverlay/MangaOverlay";
 
@@ -23,10 +23,23 @@ export default function App() {
     if (root) root.style.pointerEvents = "none";
   };
 
-  const handleStartCapture = () => {
+  const handleStartCapture = (mode = "simple") => {
+    setTranslationMode(mode);
     enablePointerEvents();
     setShowOverlay(true);
   };
+
+  useEffect(() => {
+    const onStartCapture = (event) => {
+      const mode = event?.detail?.mode === "deep" ? "deep" : "simple";
+      handleStartCapture(mode);
+    };
+
+    window.addEventListener("reze-overlay:start-capture", onStartCapture);
+    return () => {
+      window.removeEventListener("reze-overlay:start-capture", onStartCapture);
+    };
+  }, []);
 
   const handleFinishCapture = async ({ bbox, screenshot }) => {
     setCaptured({ bbox, screenshot });
@@ -37,7 +50,7 @@ export default function App() {
       const res = await fetch("http://localhost:8000/process-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ✅ include mode
+        // include mode
         body: JSON.stringify({ screenshot, mode: translationMode }),
       });
 
@@ -55,59 +68,13 @@ export default function App() {
 
   return (
     <>
-      {/* BUTTON ALWAYS VISIBLE */}
-      <div
-        style={{
-          position: "fixed",
-          top: "16px",
-          right: "16px",
-          zIndex: 1000000,
-          pointerEvents: "auto",
-          display: "flex",
-          gap: "10px",
-          alignItems: "center",
-        }}
-      >
-        {/* Mode selector */}
-        <select
-          value={translationMode}
-          onChange={(e) => setTranslationMode(e.target.value)}
-          style={{
-            padding: "8px 10px",
-            borderRadius: "10px",
-            border: "1px solid #4b5563",
-            background: "#111827",
-            color: "white",
-            fontSize: "14px",
-          }}
-        >
-          <option value="simple">Simple</option>
-          <option value="deep">Deep</option>
-        </select>
-
-        <button
-          onClick={handleStartCapture}
-          style={{
-            padding: "8px 12px",
-            background: "#111827",
-            color: "white",
-            borderRadius: "999px",
-            border: "1px solid #4b5563",
-            fontSize: "14px",
-            cursor: "pointer",
-          }}
-        >
-          Capture Manga Area
-        </button>
-      </div>
-
       {/* DRAG-TO-CROP LAYER (only when selecting) */}
       {showOverlay && <CaptureOverlay onCapture={handleFinishCapture} />}
 
       {/* OVERLAYED TRANSLATION (only after capture + backend) */}
       {captured?.bbox && (
         <div
-          id="manga-overlay-root"
+          id="manga-overlay-output"
           style={{
             position: "absolute",
             left: captured.bbox.x,

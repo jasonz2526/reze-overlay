@@ -6,3 +6,11 @@ data
 .venv
 __pycache__/
 *.pyc
+
+# Frontend build/deps
+manga-overlay/node_modules/
+manga-overlay/dist/
+
+# Local generated artifacts
+images/*_debug*.jpg
+translated_output.json

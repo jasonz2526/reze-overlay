@@ -24,16 +24,24 @@ You also need an OpenAI API key for translation.
 
 3. Install required backend packages:
    pip install -r requirements.txt
+   Runtime-only option:
+   pip install -r requirements-runtime.txt
 
 4. Set your OpenAI API key:
    export OPENAI_API_KEY="YOUR_KEY_HERE"
    (Windows PowerShell: setx OPENAI_API_KEY "YOUR_KEY_HERE")
+   Optional for fast mode:
+   export DEEPL_API_KEY="YOUR_KEY_HERE"
+   (Windows PowerShell: setx DEEPL_API_KEY "YOUR_KEY_HERE")
 
 5. Run the FastAPI backend server:
-   uvicorn src.new_pipeline:app --reload
+   uvicorn src.server:app --reload
 
 The backend will start on:
    http://localhost:8000
+
+Shortcut from repo root:
+   make run-api
 
 ## FRONTEND SETUP (REACT APP)
 --------------------------
@@ -48,6 +56,9 @@ The backend will start on:
 
 The UI will start on:
    http://localhost:5173
+
+Shortcut from repo root:
+   make run-ui
 
 You MUST keep this tab open while using the Chrome extension.
 
@@ -67,13 +78,24 @@ You MUST keep this tab open while using the Chrome extension.
 
 This installs the custom extension that injects the React overlay into any manga website.
 
+## BUILD + SYNC EXTENSION ASSETS
+----------------------
+From the repo root, run:
+   make build-extension
+
+This will:
+1. Build the React overlay bundle
+2. Copy the latest `dist/assets/index-*.js` to `manga-extension/overlay.js`
+3. Copy the latest `dist/assets/index-*.css` to `manga-extension/overlay.css`
+
 ## HOW TO USE THE SYSTEM
 ---------------------
 1. Navigate to ANY manga website (e.g., ComicWalker, MangaDex, personal images).
 2. Click the Chrome extension icon.
-3. Press the “Capture Manga Area” button that appears.
-4. Click-and-drag to select the region of the screen containing the manga page.
-5. The system:
+3. Pick translation mode (`Simple` or `Deep`) in the popup.
+4. Press `Start Capture` (or use `Ctrl+Shift+M` / `Command+Shift+M`).
+5. Click-and-drag to select the region of the screen containing the manga page.
+6. The system:
    - Captures the screenshot
    - Sends it to the Python backend
    - Runs YOLO detection, OCR, cleaning, and translation
@@ -87,8 +109,8 @@ If enabled, the system also draws speech bubble masks to hide the original Japan
 1. Run the backend and frontend normally.
 2. Place any example manga image inside:
    manga-overlay/public/example.jpg
-3. In main.jsx, uncomment:
-    ```// import App from "./TestApp";```
+3. In main.jsx, temporarily switch:
+    ```import App from "./TestApp";```
 This allows you to test overlay rendering without using HTML2Canvas or the Chrome extension.
 
 ## OPENAI API USAGE
