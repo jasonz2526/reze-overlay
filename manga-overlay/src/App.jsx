@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import CaptureOverlay from "./components/CaptureOverlay/CaptureOverlay";
 import MangaOverlay from "./components/MangaOverlay/MangaOverlay";
 
@@ -8,6 +8,8 @@ export default function App() {
 
   const [panels, setPanels] = useState(null);
   const [imageSrc, setImageSrc] = useState(null);
+
+  const [translationMode, setTranslationMode] = useState("simple"); // "simple" | "deep"
 
   // Enable pointer interaction when selecting
   const enablePointerEvents = () => {
@@ -35,7 +37,8 @@ export default function App() {
       const res = await fetch("http://localhost:8000/process-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ screenshot }),
+        // ✅ include mode
+        body: JSON.stringify({ screenshot, mode: translationMode }),
       });
 
       const data = await res.json();
@@ -43,7 +46,7 @@ export default function App() {
 
       if (data.success) {
         setPanels(data.result.panels);
-        setImageSrc(screenshot); // base64 from html2canvas
+        setImageSrc(screenshot);
       }
     } catch (err) {
       console.error("ERROR contacting backend:", err);
@@ -60,8 +63,28 @@ export default function App() {
           right: "16px",
           zIndex: 1000000,
           pointerEvents: "auto",
+          display: "flex",
+          gap: "10px",
+          alignItems: "center",
         }}
       >
+        {/* Mode selector */}
+        <select
+          value={translationMode}
+          onChange={(e) => setTranslationMode(e.target.value)}
+          style={{
+            padding: "8px 10px",
+            borderRadius: "10px",
+            border: "1px solid #4b5563",
+            background: "#111827",
+            color: "white",
+            fontSize: "14px",
+          }}
+        >
+          <option value="simple">Simple</option>
+          <option value="deep">Deep</option>
+        </select>
+
         <button
           onClick={handleStartCapture}
           style={{
@@ -79,9 +102,7 @@ export default function App() {
       </div>
 
       {/* DRAG-TO-CROP LAYER (only when selecting) */}
-      {showOverlay && (
-        <CaptureOverlay onCapture={handleFinishCapture} />
-      )}
+      {showOverlay && <CaptureOverlay onCapture={handleFinishCapture} />}
 
       {/* OVERLAYED TRANSLATION (only after capture + backend) */}
       {captured?.bbox && (
@@ -98,13 +119,8 @@ export default function App() {
             overflow: "hidden",
           }}
         >
-          {/* Place translated overlay */}
           {panels && imageSrc && (
-            <MangaOverlay
-              imageUrl={imageSrc}
-              panels={panels}
-              debug={false}
-            />
+            <MangaOverlay imageUrl={imageSrc} panels={panels} debug={false} />
           )}
         </div>
       )}

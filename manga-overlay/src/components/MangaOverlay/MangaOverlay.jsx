@@ -176,7 +176,7 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
     });
 
     // Clamp the result to reasonable bounds (e.g., don't go below 11px, don't go above 22px)
-    const finalGlobalSize = Math.max(5, Math.min(minCalculatedSize, 22));
+    const finalGlobalSize = Math.max(5, Math.min(minCalculatedSize, 22)) - 3;
 
     console.log(finalGlobalSize)
     setGlobalFontSize(finalGlobalSize);
@@ -197,7 +197,7 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
         const usableW = boxW * paddingFactor;
         const usableH = boxH * paddingFactor;
 
-        newOutsideSizes[`${pIdx}-${tIdx}`] = calculateMaxFit(t.en, usableW, usableH, 0);
+        newOutsideSizes[`${pIdx}-${tIdx}`] = calculateMaxFit(t.en, usableW, usableH, 0) - 1;
       });
     });
 

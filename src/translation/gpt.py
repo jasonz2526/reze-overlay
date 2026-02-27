@@ -32,14 +32,14 @@ class GPTTranslator:
       "bubbles": [
         {
           "bubble_id": <int>,
-          "jp": "<original>",
+          "jp": "TL",
           "en": "<translation>"
         }
       ],
       "outside_text": [
         {
           "text_id": <int>,
-          "jp": "<original>",
+          "jp": "TL",
           "en": "<translation>"
         }
       ]
@@ -57,7 +57,6 @@ Translate the following manga page into natural English while preserving:
 - emotional nuance
 - character voice
 - trailing ellipses (…)
-- dramatic pauses
 - manga-typical implied meaning, but do NOT add meaning
 
 DO NOT:
@@ -65,9 +64,8 @@ DO NOT:
 - merge bubbles
 - remove punctuation
 - add explanations
-- add honorifics unless necessary
 
-Return ONLY valid JSON in this exact schema:
+Do not keep the original JP in the schema. Return ONLY valid JSON in this exact schema:
 
 {schema}
 
