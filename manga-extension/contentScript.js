@@ -40,15 +40,31 @@
 })();
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.action !== "START_CAPTURE") return;
+  if (msg?.action === "START_CAPTURE") {
+    window.dispatchEvent(
+      new CustomEvent("reze-overlay:start-capture", {
+        detail: {
+          mode: msg.mode === "deep" ? "deep" : "simple",
+          autoRecaptureOnArrow: Boolean(msg.autoRecaptureOnArrow),
+        },
+      })
+    );
 
-  window.dispatchEvent(
-    new CustomEvent("reze-overlay:start-capture", {
-      detail: { mode: msg.mode === "deep" ? "deep" : "simple" },
-    })
-  );
+    sendResponse({ ok: true });
+    return;
+  }
 
-  sendResponse({ ok: true });
+  if (msg?.action === "UPDATE_CAPTURE_SETTINGS") {
+    window.dispatchEvent(
+      new CustomEvent("reze-overlay:update-settings", {
+        detail: {
+          autoRecaptureOnArrow: Boolean(msg.autoRecaptureOnArrow),
+        },
+      })
+    );
+
+    sendResponse({ ok: true });
+  }
 });
 
 window.addEventListener("reze-overlay:capture-screen-request", (event) => {

@@ -14,7 +14,7 @@ RezeOverlay allows users to translate manga panels on any website without downlo
   pip install -r requirements.txt
   (runtime-only option: `pip install -r requirements-runtime.txt`)
 - Set your API keys:
-  export OPENAI_API_KEY="YOUR_KEY_HERE"
+  export REZE_OPENAI_API_KEY="YOUR_KEY_HERE"
   export DEEPL_API_KEY="YOUR_KEY_HERE"
 - Run the backend:
   python -m uvicorn src.server:app --reload --port 8000

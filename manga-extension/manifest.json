@@ -12,10 +12,24 @@
   "commands": {
     "capture-manga": {
       "suggested_key": {
-        "default": "Ctrl+Shift+M",
-        "mac": "Command+Shift+M"
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
       },
       "description": "Start manga capture using saved translation mode"
+    },
+    "capture-manga-simple": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Start manga capture in simple mode"
+    },
+    "capture-manga-deep": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+D",
+        "mac": "Command+Shift+D"
+      },
+      "description": "Start manga capture in deep mode"
     }
   },
   "content_scripts": [

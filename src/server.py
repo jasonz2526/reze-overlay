@@ -18,8 +18,7 @@ from src.translation.merge import merge_panels_and_translations
 from dotenv import load_dotenv
 load_dotenv()
 
-# Prefer the standard key name, but keep backward compatibility.
-REZE_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("REZE_OPENAI_API_KEY")
+REZE_OPENAI_API_KEY = os.getenv("REZE_OPENAI_API_KEY")
 DEEPL_API_KEY = os.getenv("DEEPL_API_KEY")
 
 # Load models once
@@ -43,7 +42,7 @@ app.add_middleware(
 
 class ImageRequest(BaseModel):
     screenshot: str  # Base64 string
-    mode: Literal["simple", "deep"] = "simple"  # <-- add this
+    mode: Literal["simple", "deep"] = "simple"  
 
 
 @app.post("/process-image")
@@ -60,15 +59,15 @@ def process_image(req: ImageRequest):
 
         # 3) Convert to translation input format
         gpt_input_json = build_gpt_page_json(page_result["panels"])
-
         # 4) Choose translation engine based on mode
         if req.mode == "deep":
-            # If translate_page is async, you can keep asyncio.run in a sync endpoint.
-            # (Cleaner option: make endpoint async; see note below.)
+            print("[process-image] Using GPT deep translation")
             output = asyncio.run(gpt.translate_page(gpt_input_json))
         else:
+            print("[process-image] Using DeepL simple translation")
             output = deepl.translate_panels_schema(gpt_input_json)
 
+        print(output)
         # 5) Merge translations back into panels
         final_json = merge_panels_and_translations(page_result["panels"], output)
 

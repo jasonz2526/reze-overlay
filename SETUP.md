@@ -28,8 +28,8 @@ You also need an OpenAI API key for translation.
    pip install -r requirements-runtime.txt
 
 4. Set your OpenAI API key:
-   export OPENAI_API_KEY="YOUR_KEY_HERE"
-   (Windows PowerShell: setx OPENAI_API_KEY "YOUR_KEY_HERE")
+   export REZE_OPENAI_API_KEY="YOUR_KEY_HERE"
+   (Windows PowerShell: setx REZE_OPENAI_API_KEY "YOUR_KEY_HERE")
    Optional for fast mode:
    export DEEPL_API_KEY="YOUR_KEY_HERE"
    (Windows PowerShell: setx DEEPL_API_KEY "YOUR_KEY_HERE")
