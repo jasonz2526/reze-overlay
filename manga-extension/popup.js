@@ -47,6 +47,11 @@ async function startCapture() {
   );
 }
 
+async function updateTranslationModeSetting() {
+  const mode = getSelectedMode();
+  await chrome.storage.sync.set({ translationMode: mode });
+}
+
 async function updateAutoRecaptureSetting() {
   const autoRecaptureOnArrow = Boolean(autoRecaptureToggle?.checked);
   await chrome.storage.sync.set({ autoRecaptureOnArrow });
@@ -61,4 +66,7 @@ async function updateAutoRecaptureSetting() {
 
 restoreSettings();
 startBtn.addEventListener("click", startCapture);
+modeInputs.forEach((input) =>
+  input.addEventListener("change", updateTranslationModeSetting)
+);
 autoRecaptureToggle?.addEventListener("change", updateAutoRecaptureSetting);

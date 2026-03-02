@@ -26,8 +26,8 @@
     },
     "capture-manga-deep": {
       "suggested_key": {
-        "default": "Ctrl+Shift+D",
-        "mac": "Command+Shift+D"
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
       },
       "description": "Start manga capture in deep mode"
     }

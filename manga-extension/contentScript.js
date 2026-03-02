@@ -24,8 +24,11 @@
 
   // Full-page overlay root; app will toggle pointer events while selecting.
   Object.assign(root.style, {
-    position: "fixed",
-    inset: "0",
+    position: "absolute",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
     pointerEvents: "none",
     zIndex: "999999",
   });

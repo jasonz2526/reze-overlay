@@ -3,6 +3,11 @@ import time
 from typing import Dict, Any, List, Optional
 from openai import OpenAI, AsyncOpenAI
 import asyncio
+import re
+from src.translation.utils import (
+    build_compact_gpt_input,
+    reconstruct_gpt_output_from_compact,
+)
 
 class GPTTranslator:
     """
@@ -12,7 +17,7 @@ class GPTTranslator:
     - panel → outside_text
     """
 
-    def __init__(self, model: str = "gpt-5-mini", api_key: Optional[str] = None):
+    def __init__(self, model: str, api_key: Optional[str] = None):
         self.api_key = api_key
         if not self.api_key:
             raise RuntimeError("Missing OpenAI API key")
@@ -20,72 +25,58 @@ class GPTTranslator:
         #self.client = OpenAI(api_key=self.api_key)
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = model
-        self.max_retries = 3
+        self.max_retries = 2
+        self.last_metrics: Dict[str, Any] = {}
 
     # Prompt builder
-    def _build_prompt(self, page_json: Dict[str, Any]) -> str:
-        schema = """
-{
-  "panels": [
-    {
-      "panel_id": <int>,
-      "bubbles": [
-        {
-          "bubble_id": <int>,
-          "jp": "TL",
-          "en": "<translation>"
-        }
-      ],
-      "outside_text": [
-        {
-          "text_id": <int>,
-          "jp": "TL",
-          "en": "<translation>"
-        }
-      ]
-    }
-  ]
-}
-"""
-
+    def _build_prompt(self, compact_json: Dict[str, Any]) -> str:
         return f"""
 You are a professional manga translator.
 
-Translate the following manga page into natural English while preserving:
-- humor
-- tone
-- emotional nuance
-- character voice
-- trailing ellipses (…)
-- manga-typical implied meaning, but do NOT add meaning
+Translate each Japanese line into natural English while preserving tone, nuance, voice,
+and punctuation. Lines are already in manga reading order. Use nearby lines for context, but translate each line independently. 
 
 DO NOT:
-- reorder items
-- merge bubbles
-- remove punctuation
+- reorder lines
+- change any "i" values
+- add/remove rows
 - add explanations
 
-Do not keep the original JP in the schema. Return ONLY valid JSON in this exact schema:
-
-{schema}
+Return ONLY strict JSON with this exact compact schema:
+{{
+  "l": [
+    {{"i": "p1b1", "e": "<translation>"}}
+  ]
+}}
 
 Here is the page to translate:
 
-{json.dumps(page_json, ensure_ascii=False, indent=2)}
+{json.dumps(compact_json, ensure_ascii=False, separators=(",", ":"))}
 """
     # Extract text safely from OpenAI response
-    async def _call_llm(self, prompt: str) -> str:
+    async def _call_llm(self, prompt: str) -> Dict[str, Any]:
+        started = time.perf_counter()
         response = await self.client.responses.create(
             model=self.model,
             input=prompt,
         )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        usage = getattr(response, "usage", None)
+
+        usage_dict = {
+            "input_tokens": getattr(usage, "input_tokens", None),
+            "output_tokens": getattr(usage, "output_tokens", None),
+            "total_tokens": getattr(usage, "total_tokens", None),
+            "latency_ms": elapsed_ms,
+            "model": self.model,
+        }
 
         # Find the assistant "output_text" block
         for block in response.output:
             if block.type == "message":
                 for item in block.content:
                     if item.type == "output_text":
-                        return item.text
+                        return {"text": item.text, "usage": usage_dict}
 
         raise ValueError(
             "No output_text found in response.\n"
@@ -94,10 +85,57 @@ Here is the page to translate:
 
     # Validate & parse returned JSON
     def _safe_json_parse(self, text: str) -> Optional[Dict[str, Any]]:
+        def try_load(candidate: str) -> Optional[Dict[str, Any]]:
+            try:
+                parsed = json.loads(candidate)
+                return parsed if isinstance(parsed, dict) else None
+            except Exception:
+                return None
+
         try:
-            return json.loads(text.strip())
+            # Fast path: already strict JSON
+            parsed = json.loads(text.strip())
+            return parsed if isinstance(parsed, dict) else None
         except Exception:
-            return None
+            pass
+
+        # Strip markdown code fences if present.
+        fenced = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, flags=re.IGNORECASE)
+        if fenced:
+            parsed = try_load(fenced.group(1).strip())
+            if parsed is not None:
+                return parsed
+
+        # Try to extract the first balanced JSON object from noisy text.
+        start = text.find("{")
+        if start != -1:
+            depth = 0
+            in_str = False
+            esc = False
+            for i in range(start, len(text)):
+                ch = text[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == "\\":
+                        esc = True
+                    elif ch == "\"":
+                        in_str = False
+                else:
+                    if ch == "\"":
+                        in_str = True
+                    elif ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            candidate = text[start:i + 1]
+                            parsed = try_load(candidate)
+                            if parsed is not None:
+                                return parsed
+                            break
+
+        return None
 
     # Public API — translate full page
     async def translate_page(self, page_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -113,17 +151,38 @@ Here is the page to translate:
           ]
         }
         """
-        prompt = self._build_prompt(page_json)
+        prompt_started = time.perf_counter()
+        compact_input = build_compact_gpt_input(page_json)
+        prompt = self._build_prompt(compact_input)
+        prompt_build_ms = int((time.perf_counter() - prompt_started) * 1000)
+        last_usage = {}
 
         for attempt in range(self.max_retries):
-            raw = await self._call_llm(prompt)
+            call_result = await self._call_llm(prompt)
+            raw = call_result["text"]
+            last_usage = call_result.get("usage", {})
             parsed = self._safe_json_parse(raw)
 
-            if parsed and "panels" in parsed:
-                return parsed
+            if parsed and isinstance(parsed.get("l"), list):
+                self.last_metrics = {
+                    **last_usage,
+                    "attempts": attempt + 1,
+                    "protocol": "compact-v1",
+                    "input_lines": len(compact_input.get("l", [])),
+                    "prompt_build_ms": prompt_build_ms,
+                }
+                return reconstruct_gpt_output_from_compact(page_json, parsed)
 
             print(f"[WARN] JSON parse failed on attempt {attempt+1}. Retrying...")
             await asyncio.sleep(0.4)
+
+        self.last_metrics = {
+            **last_usage,
+            "attempts": self.max_retries,
+            "protocol": "compact-v1",
+            "failed": True,
+            "prompt_build_ms": prompt_build_ms,
+        }
 
         raise ValueError("LLM failed to output valid JSON.")
 

@@ -94,6 +94,42 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
    * CORE LOGIC: Compute Max Fitting Font Size
    * Uses a hidden DOM element to test wrap capability.
    */
+  const getTextFitProfile = (text) => {
+    const cleaned = (text || "").trim();
+    const words = cleaned ? cleaned.split(/\s+/) : [];
+    const charCount = cleaned.replace(/\s+/g, "").length;
+    const wordCount = words.length;
+    const isSingleWord = wordCount === 1;
+    const isShortPhrase = !isSingleWord && wordCount <= 3 && charCount <= 14;
+
+    // Wrap profile:
+    // - short text: avoid aggressive breaking/hyphenation
+    // - long text: allow flexible wrapping for fit
+    const wrap =
+      isSingleWord || isShortPhrase
+        ? {
+            overflowWrap: "normal",
+            wordBreak: "normal",
+            hyphens: "none",
+            letterSpacing: "0em",
+          }
+        : {
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+            hyphens: "auto",
+            letterSpacing: "-0.02em",
+          };
+
+    // Line constraints:
+    // - single-word bubbles should remain one line
+    // - short phrases should generally be <= 2 lines
+    let maxLines = null;
+    if (isSingleWord) maxLines = 1;
+    else if (isShortPhrase) maxLines = 2;
+
+    return { isSingleWord, charCount, wrap, maxLines };
+  };
+
   const calculateMaxFit = (text, width, height, padding = 20) => {
     // 1. Safety checks
     if (!text || width <= 0 || height <= 0) return 10;
@@ -116,12 +152,13 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
     tester.style.width = `${availableW}px`; // Hard constraint on width
     tester.style.padding = "0"; 
 
-    // 3. Force word breaking
+    // 3. Dynamic wrap/line profile by text shape
+    const profile = getTextFitProfile(text);
     tester.style.whiteSpace = "normal";
-    tester.style.overflowWrap = "anywhere"; 
-    tester.style.wordBreak = "break-word"; 
-    tester.style.hyphens = "auto";
-    tester.style.letterSpacing = "-0.02em";
+    tester.style.overflowWrap = profile.wrap.overflowWrap;
+    tester.style.wordBreak = profile.wrap.wordBreak;
+    tester.style.hyphens = profile.wrap.hyphens;
+    tester.style.letterSpacing = profile.wrap.letterSpacing;
 
     tester.innerText = text;
     document.body.appendChild(tester);
@@ -130,13 +167,23 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
     let high = 30; 
     let bestFit = 6;
 
+    // Single-word width cap to avoid oversized letter rendering.
+    if (profile.isSingleWord && profile.charCount > 0) {
+      const approxCharWidthFactor = 0.72;
+      const singleWordCap = Math.floor(availableW / Math.max(1, profile.charCount * approxCharWidthFactor));
+      high = Math.min(high, Math.max(8, singleWordCap));
+    }
+
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
       tester.style.fontSize = `${mid}px`;
 
-      // We trust CSS 'overflow-wrap' to handle the Width constraint.
-      // Checking scrollWidth often triggers false negatives due to sub-pixel rendering.
-      if (tester.scrollHeight <= availableH) {
+      const lineHeightPx = mid * 1.15;
+      const lineCount = Math.max(1, Math.round(tester.scrollHeight / lineHeightPx));
+      const withinHeight = tester.scrollHeight <= availableH;
+      const withinLines = profile.maxLines == null || lineCount <= profile.maxLines;
+
+      if (withinHeight && withinLines) {
         bestFit = mid; // Store this as the current candidate.
         low = mid + 1; // Try to go bigger.
       } else {
@@ -188,13 +235,15 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
         const [x1, y1, x2, y2] = t.bbox;
         const boxW = (x2 - x1) * scale;
         const boxH = (y2 - y1) * scale;
+        const profile = getTextFitProfile(t.en);
         
         // Outside text uses percentage padding logic in your render, 
         // so we calculate available space similarly
         const usableW = boxW * paddingFactor;
         const usableH = boxH * paddingFactor;
-
-        newOutsideSizes[`${pIdx}-${tIdx}`] = calculateMaxFit(t.en, usableW, usableH, 0) - 1;
+        const fitted = calculateMaxFit(t.en, usableW, usableH, 0);
+        const nudge = profile.isSingleWord ? 0 : 1;
+        newOutsideSizes[`${pIdx}-${tIdx}`] = Math.max(6, Math.min(fitted - nudge, 28));
       });
     });
 
@@ -230,24 +279,27 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
           <React.Fragment key={pIdx}>
             
             {/* Bubbles - Independent per bubble */}
-            {panel.bubbles?.map((b, bIdx) => (
-              (() => {
-                const key = `${panel.panel_id ?? "p"}-${b.bubble_id ?? bIdx}`;
-                return (
-              <div
-                key={`bubble-${pIdx}-${bIdx}`}
-                className="bubble-text"
-                style={{
-                  ...boxStyle(b.bbox),
-                  fontSize: `${bubbleFontSizes[key] || 12}px`,
-                  padding: "4px", // Matches logic in calculateMaxFit
-                }}
-              >
-                {b.en}
-              </div>
-                );
-              })()
-            ))}
+            {panel.bubbles?.map((b, bIdx) => {
+              const key = `${panel.panel_id ?? "p"}-${b.bubble_id ?? bIdx}`;
+              const profile = getTextFitProfile(b.en);
+              return (
+                <div
+                  key={`bubble-${pIdx}-${bIdx}`}
+                  className="bubble-text"
+                  style={{
+                    ...boxStyle(b.bbox),
+                    fontSize: `${bubbleFontSizes[key] || 12}px`,
+                    padding: "4px", // Matches logic in calculateMaxFit
+                    overflowWrap: profile.wrap.overflowWrap,
+                    wordBreak: profile.wrap.wordBreak,
+                    hyphens: profile.wrap.hyphens,
+                    letterSpacing: profile.wrap.letterSpacing,
+                  }}
+                >
+                  {b.en}
+                </div>
+              );
+            })}
 
             {/* Outside Text - Independent Sizes */}
             {panel.outside_text?.map((t, tIdx) => {
@@ -259,6 +311,7 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
               const paddingPercent = (1 - paddingFactor) / 2;
               const paddingX = boxW * paddingPercent; 
               const paddingY = boxH * paddingPercent;
+              const profile = getTextFitProfile(t.en);
 
               return (
                 <div
@@ -268,6 +321,10 @@ export default function MangaOverlay({ imageUrl, panels, debug = false }) {
                     ...boxStyle(t.bbox),
                     fontSize: `${outsideFontSizes[key] || 12}px`,
                     padding: `${paddingY}px ${paddingX}px`,
+                    overflowWrap: profile.wrap.overflowWrap,
+                    wordBreak: profile.wrap.wordBreak,
+                    hyphens: profile.wrap.hyphens,
+                    letterSpacing: profile.wrap.letterSpacing,
                   }}
                 >
                   {t.en}

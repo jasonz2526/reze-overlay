@@ -20,6 +20,7 @@ export default function App() {
   const showOverlayRef = useRef(false);
   const recaptureInFlightRef = useRef(false);
   const recaptureTimerRef = useRef(null);
+  const suppressAutoRecaptureUntilRef = useRef(0);
 
   useEffect(() => {
     capturedRef.current = captured;
@@ -113,7 +114,18 @@ export default function App() {
   };
 
   const handleFinishCapture = async ({ bbox, screenshot }) => {
-    setCaptured({ bbox, screenshot });
+    const docBbox = {
+      x: bbox.x + window.scrollX,
+      y: bbox.y + window.scrollY,
+      width: bbox.width,
+      height: bbox.height,
+    };
+
+    setCaptured({
+      bboxViewport: bbox,
+      bboxDoc: docBbox,
+      screenshot,
+    });
     setShowOverlay(false);
     disablePointerEvents();
     await translateScreenshot(screenshot, modeRef.current);
@@ -175,18 +187,30 @@ export default function App() {
   const recaptureFromCurrentBox = async () => {
     if (recaptureInFlightRef.current) return;
     const current = capturedRef.current;
-    if (!current?.bbox) return;
+    if (!current?.bboxDoc) return;
 
     recaptureInFlightRef.current = true;
+    suppressAutoRecaptureUntilRef.current = Date.now() + 1600;
     try {
       const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const fullScreenshot = await waitForCaptureScreen(requestId);
       if (!fullScreenshot) return;
 
-      const croppedScreenshot = await cropDataUrlToBbox(fullScreenshot, current.bbox);
+      const viewportBbox = {
+        x: current.bboxDoc.x - window.scrollX,
+        y: current.bboxDoc.y - window.scrollY,
+        width: current.bboxDoc.width,
+        height: current.bboxDoc.height,
+      };
+
+      const croppedScreenshot = await cropDataUrlToBbox(fullScreenshot, viewportBbox);
       if (!croppedScreenshot) return;
 
-      setCaptured({ bbox: current.bbox, screenshot: croppedScreenshot });
+      setCaptured({
+        bboxViewport: viewportBbox,
+        bboxDoc: current.bboxDoc,
+        screenshot: croppedScreenshot,
+      });
       await translateScreenshot(croppedScreenshot, modeRef.current);
     } catch (err) {
       console.warn("Auto recapture failed:", err);
@@ -238,7 +262,7 @@ export default function App() {
     const onArrowNavigate = (event) => {
       if (!autoRecaptureRef.current) return;
       if (showOverlayRef.current) return;
-      if (!capturedRef.current?.bbox) return;
+      if (!capturedRef.current?.bboxDoc) return;
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
 
       const target = event.target;
@@ -256,7 +280,7 @@ export default function App() {
     const onLikelyNavClick = (event) => {
       if (!autoRecaptureRef.current) return;
       if (showOverlayRef.current) return;
-      if (!capturedRef.current?.bbox) return;
+      if (!capturedRef.current?.bboxDoc) return;
       if (event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       if (!isLikelyReaderNavClick(event.target)) return;
@@ -278,45 +302,96 @@ export default function App() {
 
   return (
     <>
-      {isProcessing && (
-        <div
-          style={{
-            position: "fixed",
-            top: 16,
-            right: 16,
-            zIndex: 1000002,
-            background: "rgba(17, 24, 39, 0.92)",
-            color: "#fff",
-            border: "1px solid rgba(255,255,255,0.2)",
-            borderRadius: 999,
-            padding: "7px 12px",
-            fontSize: 12,
-            fontWeight: 700,
-            pointerEvents: "none",
-          }}
-        >
-          Processing...
-        </div>
-      )}
-
       {/* DRAG-TO-CROP LAYER (only when selecting) */}
       {showOverlay && <CaptureOverlay onCapture={handleFinishCapture} />}
 
       {/* OVERLAYED TRANSLATION (only after capture + backend) */}
-      {captured?.bbox && (
+      {captured?.bboxDoc && (
         <div
           id="manga-overlay-output"
           style={{
             position: "absolute",
-            left: captured.bbox.x,
-            top: captured.bbox.y,
-            width: captured.bbox.width,
-            height: captured.bbox.height,
+            left: captured.bboxDoc.x,
+            top: captured.bboxDoc.y,
+            width: captured.bboxDoc.width,
+            height: captured.bboxDoc.height,
             pointerEvents: "none",
             zIndex: 999999,
             overflow: "hidden",
           }}
         >
+          {isProcessing && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 1000002,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(17, 24, 39, 0.38)",
+                backdropFilter: "blur(1px)",
+                pointerEvents: "none",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "rgba(17, 24, 39, 0.86)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  borderRadius: 12,
+                  padding: "10px 14px",
+                }}
+              >
+                <svg
+                  width="26"
+                  height="26"
+                  viewBox="0 0 50 50"
+                  aria-label="Loading"
+                  role="img"
+                >
+                  <circle
+                    cx="25"
+                    cy="25"
+                    r="20"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.25)"
+                    strokeWidth="4"
+                  />
+                  <path
+                    d="M25 5a20 20 0 0 1 20 20"
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  >
+                    <animateTransform
+                      attributeName="transform"
+                      type="rotate"
+                      from="0 25 25"
+                      to="360 25 25"
+                      dur="0.8s"
+                      repeatCount="indefinite"
+                    />
+                  </path>
+                </svg>
+                <div
+                  style={{
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  Translating...
+                </div>
+              </div>
+            </div>
+          )}
+
           {panels && imageSrc && (
             <MangaOverlay imageUrl={imageSrc} panels={panels} debug={false} />
           )}

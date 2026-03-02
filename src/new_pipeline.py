@@ -3,6 +3,8 @@ from ultralytics import YOLO
 from src.ocr.manga_ocr import OCRReader
 import os
 import numpy as np
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class MangaPipeline:
     def __init__(self, panel_model_path, bubble_model_path):
@@ -17,6 +19,16 @@ class MangaPipeline:
 
 
     def process_page(self, image):
+        started = time.perf_counter()
+        timings = {
+            "panel_detect_ms": 0,
+            "bubble_detect_ms": 0,
+            "ocr_total_ms": 0,
+            "ocr_per_crop_ms": [],
+            "ocr_skipped_count": 0,
+            "ocr_processed_count": 0,
+        }
+
         # If already a NumPy image, use it directly
         if isinstance(image, np.ndarray):
             img = image
@@ -29,7 +41,9 @@ class MangaPipeline:
         h, w = img.shape[:2]
 
         # DETECT PANELS
+        t0 = time.perf_counter()
         panel_results = self.panel_detector(img)[0]
+        timings["panel_detect_ms"] = int((time.perf_counter() - t0) * 1000)
         panels = []
 
         for b in panel_results.boxes:
@@ -52,7 +66,9 @@ class MangaPipeline:
         panels = sort_panels_reading_order_two_page(panels, w, h, rtl=True)
 
         # Bubble + Text Detection
+        t1 = time.perf_counter()
         bubble_results = self.bubble_detector(img)[0]
+        timings["bubble_detect_ms"] = int((time.perf_counter() - t1) * 1000)
         boxes = bubble_results.boxes
 
         filtered_boxes = []
@@ -65,21 +81,98 @@ class MangaPipeline:
                 filtered_boxes.append(b) # No massive boxes allowed
 
         bubble_entries = []
-        for b in filtered_boxes:
+        ocr_total_started = time.perf_counter()
+        ocr_inputs = []
+
+        # Conservative OCR pre-filter thresholds (env-overridable)
+        min_crop_w = int(os.getenv("OCR_MIN_CROP_W", "14"))
+        min_crop_h = int(os.getenv("OCR_MIN_CROP_H", "14"))
+        min_crop_area = int(os.getenv("OCR_MIN_CROP_AREA", "500"))
+        min_confidence = float(os.getenv("OCR_MIN_CONFIDENCE", "0.12"))
+        min_edge_density = float(os.getenv("OCR_MIN_EDGE_DENSITY", "0.008"))
+        for idx, b in enumerate(filtered_boxes):
             x1, y1, x2, y2 = b.xyxy[0].tolist()
             raw_cls = int(b.cls[0])
             label = "bubble" if raw_cls == 1 else "outside"
             conf = float(b.conf[0])
-
             crop = img[int(y1):int(y2), int(x1):int(x2)]
-            ocr_output = self.ocr.read_text(crop)
 
+            crop_h, crop_w = crop.shape[:2] if crop is not None and crop.size > 0 else (0, 0)
+            crop_area = crop_w * crop_h
+
+            # Skip OCR for obviously low-value regions.
+            skip_ocr = False
+            if crop_w < min_crop_w or crop_h < min_crop_h or crop_area < min_crop_area:
+                skip_ocr = True
+            elif conf < min_confidence:
+                skip_ocr = True
+            else:
+                gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+                edges = cv2.Canny(gray, 80, 160)
+                edge_density = float(np.count_nonzero(edges)) / float(max(1, crop_area))
+                if edge_density < min_edge_density:
+                    skip_ocr = True
+
+            if skip_ocr:
+                timings["ocr_skipped_count"] += 1
+                bubble_entries.append({
+                    "bbox": [x1, y1, x2, y2],
+                    "label": label,
+                    "confidence": conf,
+                    "ocr": [],
+                })
+            else:
+                ocr_inputs.append({
+                    "idx": idx,
+                    "bbox": [x1, y1, x2, y2],
+                    "label": label,
+                    "confidence": conf,
+                    "crop": crop,
+                })
+
+        def _ocr_task(item):
+            t = time.perf_counter()
+            out = self.ocr.read_text(item["crop"])
+            return item["idx"], out, int((time.perf_counter() - t) * 1000)
+
+        ocr_per_idx = {}
+        ocr_ms_per_idx = {}
+        max_workers = max(1, min(int(os.getenv("OCR_WORKERS", "2")), len(ocr_inputs) if ocr_inputs else 1))
+
+        if ocr_inputs:
+            if max_workers == 1:
+                for item in ocr_inputs:
+                    idx, out, ms = _ocr_task(item)
+                    ocr_per_idx[idx] = out
+                    ocr_ms_per_idx[idx] = ms
+            else:
+                try:
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = [executor.submit(_ocr_task, item) for item in ocr_inputs]
+                        for fut in as_completed(futures):
+                            idx, out, ms = fut.result()
+                            ocr_per_idx[idx] = out
+                            ocr_ms_per_idx[idx] = ms
+                except Exception as e:
+                    print(f"[WARN] Parallel OCR failed, falling back to sequential: {e}")
+                    ocr_per_idx.clear()
+                    ocr_ms_per_idx.clear()
+                    for item in ocr_inputs:
+                        idx, out, ms = _ocr_task(item)
+                        ocr_per_idx[idx] = out
+                        ocr_ms_per_idx[idx] = ms
+
+        for item in ocr_inputs:
+            idx = item["idx"]
+            timings["ocr_per_crop_ms"].append(ocr_ms_per_idx.get(idx, 0))
+            timings["ocr_processed_count"] += 1
             bubble_entries.append({
-                "bbox": [x1, y1, x2, y2],
-                "label": label,
-                "confidence": conf,
-                "ocr": ocr_output
+                "bbox": item["bbox"],
+                "label": item["label"],
+                "confidence": item["confidence"],
+                "ocr": ocr_per_idx.get(idx, []),
             })
+        timings["ocr_total_ms"] = int((time.perf_counter() - ocr_total_started) * 1000)
 
         # Assign every bubble/text to its closest respective panel
         for entry in bubble_entries:
@@ -144,8 +237,10 @@ class MangaPipeline:
                 r for r in sorted_unique_regions if r["label"] != "bubble"
             ]
 
+        timings["total_pipeline_ms"] = int((time.perf_counter() - started) * 1000)
         return {
-            "panels": panels
+            "panels": panels,
+            "timings": timings,
         }
 
 

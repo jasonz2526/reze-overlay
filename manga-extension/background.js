@@ -10,14 +10,50 @@ async function getSavedCaptureSettings() {
   };
 }
 
+function isInjectableUrl(url = "") {
+  return /^https?:\/\//i.test(url);
+}
+
+async function ensureContentScriptInjected(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!isInjectableUrl(tab?.url)) {
+    throw new Error("Tab URL does not allow content script injection");
+  }
+
+  await chrome.scripting.insertCSS({
+    target: { tabId },
+    files: ["overlay.css"],
+  });
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["contentScript.js"],
+  });
+}
+
 async function sendStartCaptureToTab(tabId, mode, autoRecaptureOnArrow = false) {
   if (!tabId) throw new Error("No active tab id available");
 
-  await chrome.tabs.sendMessage(tabId, {
+  const payload = {
     action: "START_CAPTURE",
     mode,
     autoRecaptureOnArrow,
-  });
+  };
+
+  try {
+    await chrome.tabs.sendMessage(tabId, payload);
+  } catch (err) {
+    const message = String(err?.message || err || "");
+    const missingReceiver =
+      message.includes("Receiving end does not exist") ||
+      message.includes("Could not establish connection");
+
+    if (!missingReceiver) throw err;
+
+    // Recover by injecting content script/CSS and retrying once.
+    await ensureContentScriptInjected(tabId);
+    await chrome.tabs.sendMessage(tabId, payload);
+  }
 }
 
 async function sendStartCaptureToActiveTab(mode, autoRecaptureOnArrow = false) {
