@@ -289,10 +289,11 @@ export default function App() {
       scheduleAutoRecapture(420);
     };
 
-    window.addEventListener("keydown", onArrowNavigate);
+    // Capture phase helps on readers that intercept keys in bubble phase.
+    window.addEventListener("keydown", onArrowNavigate, true);
     window.addEventListener("click", onLikelyNavClick, true);
     return () => {
-      window.removeEventListener("keydown", onArrowNavigate);
+      window.removeEventListener("keydown", onArrowNavigate, true);
       window.removeEventListener("click", onLikelyNavClick, true);
       if (recaptureTimerRef.current) {
         clearTimeout(recaptureTimerRef.current);

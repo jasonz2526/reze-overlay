@@ -30,17 +30,22 @@ class GPTTranslator:
 
     # Prompt builder
     def _build_prompt(self, compact_json: Dict[str, Any]) -> str:
+        ids = [row["i"] for row in compact_json.get("l", []) if isinstance(row, dict) and "i" in row]
         return f"""
 You are a professional manga translator.
 
 Translate each Japanese line into natural English while preserving tone, nuance, voice,
-and punctuation. Lines are already in manga reading order. Use nearby lines for context, but translate each line independently. 
+and punctuation. Lines are already in manga reading order. Use nearby lines for context, but translate each line independently.
 
-DO NOT:
-- reorder lines
-- change any "i" values
-- add/remove rows
-- add explanations
+STRICT OUTPUT CONTRACT (must follow exactly):
+1) Return a single JSON object only (no markdown/code fences).
+2) Top-level key must be "l".
+3) "l" must be an array of objects with exactly keys:
+   - "i": id (string)
+   - "e": English translation (string)
+4) Keep the same ids and order as input.
+5) Do not add/remove rows.
+6) Do not add explanations.
 
 Return ONLY strict JSON with this exact compact schema:
 {{
@@ -48,6 +53,9 @@ Return ONLY strict JSON with this exact compact schema:
     {{"i": "p1b1", "e": "<translation>"}}
   ]
 }}
+
+Input ids in order (must match exactly):
+{json.dumps(ids, ensure_ascii=False)}
 
 Here is the page to translate:
 
@@ -137,6 +145,56 @@ Here is the page to translate:
 
         return None
 
+    def _normalize_compact_output(
+        self, parsed: Dict[str, Any], expected_ids: List[str]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Accept mild schema drift and normalize into:
+        {"l":[{"i":"...","e":"..."}]}
+        """
+        if not isinstance(parsed, dict):
+            return None
+
+        raw_lines = parsed.get("l")
+        if raw_lines is None:
+            raw_lines = parsed.get("lines")
+        if raw_lines is None:
+            return None
+        if not isinstance(raw_lines, list):
+            return None
+
+        expected_set = set(expected_ids)
+        normalized_by_id: Dict[str, str] = {}
+
+        for row in raw_lines:
+            if not isinstance(row, dict):
+                continue
+
+            rid = row.get("i", row.get("id"))
+            if not isinstance(rid, str):
+                continue
+            if rid not in expected_set:
+                continue
+            if rid in normalized_by_id:
+                continue
+
+            en = row.get("e", row.get("en", row.get("text", row.get("translation", ""))))
+            if en is None:
+                en = ""
+            if not isinstance(en, str):
+                en = str(en)
+
+            normalized_by_id[rid] = en.strip()
+
+        if not normalized_by_id:
+            return None
+
+        normalized_lines = []
+        for rid in expected_ids:
+            normalized_lines.append({"i": rid, "e": normalized_by_id.get(rid, "<missing>")})
+
+        return {"l": normalized_lines}
+
     # Public API — translate full page
     async def translate_page(self, page_json: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -156,14 +214,20 @@ Here is the page to translate:
         prompt = self._build_prompt(compact_input)
         prompt_build_ms = int((time.perf_counter() - prompt_started) * 1000)
         last_usage = {}
+        expected_ids = [
+            row["i"]
+            for row in compact_input.get("l", [])
+            if isinstance(row, dict) and "i" in row
+        ]
 
         for attempt in range(self.max_retries):
             call_result = await self._call_llm(prompt)
             raw = call_result["text"]
             last_usage = call_result.get("usage", {})
             parsed = self._safe_json_parse(raw)
+            normalized = self._normalize_compact_output(parsed, expected_ids) if parsed else None
 
-            if parsed and isinstance(parsed.get("l"), list):
+            if normalized and isinstance(normalized.get("l"), list):
                 self.last_metrics = {
                     **last_usage,
                     "attempts": attempt + 1,
@@ -171,7 +235,7 @@ Here is the page to translate:
                     "input_lines": len(compact_input.get("l", [])),
                     "prompt_build_ms": prompt_build_ms,
                 }
-                return reconstruct_gpt_output_from_compact(page_json, parsed)
+                return reconstruct_gpt_output_from_compact(page_json, normalized)
 
             print(f"[WARN] JSON parse failed on attempt {attempt+1}. Retrying...")
             await asyncio.sleep(0.4)

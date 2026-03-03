@@ -29,7 +29,7 @@ pipeline = MangaPipeline(
 )
 
 deepl = MangaTranslator(DEEPL_API_KEY)
-gpt = GPTTranslator(model="gpt-4.1-nano", api_key=REZE_OPENAI_API_KEY)
+gpt = GPTTranslator(model="gpt-4.1-mini", api_key=REZE_OPENAI_API_KEY)
 
 app = FastAPI()
 

@@ -237,6 +237,31 @@ class MangaPipeline:
                 r for r in sorted_unique_regions if r["label"] != "bubble"
             ]
 
+            # 5. Cross-class suppression:
+            # Remove outside regions that heavily overlap any bubble region.
+            # This prevents outside text rendering over speech bubbles.
+            cleaned_outside = []
+            bubbles = panel["bubbles"]
+            for outside in panel["outside_text"]:
+                outside_area = (outside["bbox"][2] - outside["bbox"][0]) * (
+                    outside["bbox"][3] - outside["bbox"][1]
+                )
+                if outside_area <= 0:
+                    continue
+
+                max_overlap_ratio = 0.0
+                for bubble in bubbles:
+                    overlap_area = box_overlap(outside["bbox"], bubble["bbox"])
+                    ratio = overlap_area / outside_area
+                    if ratio > max_overlap_ratio:
+                        max_overlap_ratio = ratio
+
+                # Keep outside text only if overlap is limited.
+                if max_overlap_ratio <= 0.35:
+                    cleaned_outside.append(outside)
+
+            panel["outside_text"] = cleaned_outside
+
         timings["total_pipeline_ms"] = int((time.perf_counter() - started) * 1000)
         return {
             "panels": panels,
