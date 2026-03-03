@@ -117,9 +117,31 @@ This allows you to test overlay rendering without using HTML2Canvas or the Chrom
 ----------------
 Your translation pipeline requires an API key. It is read from:
 
-   OPENAI_API_KEY
+   REZE_OPENAI_API_KEY
 
-The backend calls GPT-5o-mini to translate bubble text and outside text.
+The backend calls OpenAI models to translate bubble text and outside text.
+
+## MODEL TRAINING (EXTERNAL DATASET REPO)
+--------------------------------------
+Keep large datasets in a separate repo, then point this project to it:
+
+   export REZE_DATASET_ROOT="/absolute/path/to/reze-overlay-datasets"
+
+Train bubbles detector from repo root:
+
+   make train-bubbles
+
+To target another dataset yaml under that root:
+
+   make train-bubbles DATASET_REL=bubbles-v2/data.yaml
+
+If your dataset repo lives elsewhere:
+
+   make train-bubbles TRAIN_REPO=/absolute/path/to/reze-overlay-datasets
+
+See full migration details in:
+
+   docs/DATASETS.md
 
 ## TROUBLESHOOTING
 
@@ -128,5 +150,5 @@ The backend calls GPT-5o-mini to translate bubble text and outside text.
    - Not all sites allow pixel-level HTML2Canvas extraction (Chrome security)
 
 ● If no translation appears:
-   - Check OPENAI_API_KEY is set in the backend environment
+   - Check REZE_OPENAI_API_KEY is set in the backend environment
    - Check FastAPI logs for errors

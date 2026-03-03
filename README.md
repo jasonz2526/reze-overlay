@@ -45,6 +45,18 @@ RezeOverlay allows users to translate manga panels on any website without downlo
 - Drag a rectangle around the manga panel
 - The overlay appears automatically with masks + translated bubbles
 
+### 5. Training With External Datasets
+- Keep datasets in a separate repo and set:
+  export REZE_DATASET_ROOT="PATH_TO_DATASET_REPO"
+- Train bubble detector:
+  make train-bubbles
+- Use a different dataset yaml (relative to `REZE_DATASET_ROOT`):
+  make train-bubbles DATASET_REL=bubbles-v2/data.yaml
+- If your dataset repo is not `../reze-overlay-datasets`:
+  make train-bubbles TRAIN_REPO=/absolute/path/to/reze-overlay-datasets
+- Full split instructions:
+  docs/DATASETS.md
+
 ## Video Links
 [Demo Video](https://www.youtube.com/watch?v=vtOj60nGBqk)
 

@@ -6,11 +6,17 @@ data
 .venv
 __pycache__/
 *.pyc
+.DS_Store
 
 # Frontend build/deps
 manga-overlay/node_modules/
 manga-overlay/dist/
 
 # Local generated artifacts
+images/
+notebooks/
+scripts/
+scripts/bubbles-training/
+scripts/bubbles-training_v2/
 images/*_debug*.jpg
 translated_output.json
